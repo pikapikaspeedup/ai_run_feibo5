@@ -177,7 +177,7 @@ canvas#cv {
 }
 .btn {
   display: inline-block; cursor: pointer; border: 2px solid #000;
-  background: var(--badge); color: var(--ink);
+  background: var(--badge); color: var(--ink); text-decoration: none;
   font-family: var(--sans); font-weight: 700; font-size: 15px; letter-spacing: 3px;
   padding: 10px 30px; box-shadow: 4px 4px 0 rgba(0,0,0,.5);
   transition: transform .05s steps(2), box-shadow .05s steps(2);

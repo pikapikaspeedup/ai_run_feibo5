@@ -81,6 +81,8 @@ export default function StartScreen() {
           <div className="btn-row">
             <button className="btn" onClick={startGame}>签到进场</button>
             <button className="btn ghost" onClick={() => setDexOpen(o => !o)}>武器图鉴 {dexOpen ? '▴' : '▾'}</button>
+            <a className="btn ghost" href="https://github.com/pikapikaspeedup/ai_run_feibo5"
+              target="_blank" rel="noopener noreferrer">★ GitHub 开源仓库</a>
           </div>
           {dexOpen && (
             <div id="dex">
