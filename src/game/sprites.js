@@ -270,6 +270,36 @@ const MOB_CCBOMB_ROWS = [
   'kkkkkkkk',
   '........',
 ];
+/* 加急邮件：email 升级版，红色边框 */
+const MOB_URGENT_EMAIL_ROWS = [
+  'kkkkkkkk',
+  'kRRRRRRk',
+  'kRWWWWRk',
+  'kRWkkWRk',
+  'kRWWWWRk',
+  'kkkkkkkk',
+  '........',
+];
+/* 钓鱼邮件：远程射手，紫色带诱饵图案 */
+const MOB_PHISHING_ROWS = [
+  'kkkkkkkk',
+  'kppppppk',
+  'kppYYYPk',
+  'kpYpppPk',
+  'kppppppk',
+  'kkkkkkkk',
+  '........',
+];
+/* 死线警报：红黄闪烁警示条 */
+const MOB_DEADLINE_ROWS = [
+  '..kkkk..',
+  '.kRRRRk.',
+  '.kRYYRk.',
+  '.kRYYRk.',
+  '..kkkk..',
+  '..kCCk..',
+  '..kCCk..',
+];
 /* 已读不回：迷你蓝色气泡 */
 const MOB_READREPLY_ROWS = [
   '.kkkkk..',
@@ -402,6 +432,9 @@ export const SPR = {
   mob_email: makeSprite(MOB_EMAIL_ROWS),
   mob_sticky: makeSprite(MOB_STICKY_ROWS),
   mob_ccbomb: makeSprite(MOB_CCBOMB_ROWS),
+  mob_urgent_email: makeSprite(MOB_URGENT_EMAIL_ROWS),
+  mob_phishing: makeSprite(MOB_PHISHING_ROWS),
+  mob_deadline: makeSprite(MOB_DEADLINE_ROWS),
   mob_readreply: makeSprite(MOB_READREPLY_ROWS),
   mob_meeting: makeSprite(MOB_MEETING_ROWS),
   mob_urgent: makeSprite(MOB_URGENT_ROWS),

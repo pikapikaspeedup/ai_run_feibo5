@@ -324,4 +324,59 @@ canvas#cv {
   #levelup-cards { flex-direction: column; }
   .paper { padding: 20px 16px; }
   .paper h1 { font-size: 26px; }
+  .pause-grid { grid-template-columns: 1fr !important; }
+  .pause-paper { width: min(720px, 96vw) !important; }
+}
+
+/* ===== 暂停/员工档案速览 ===== */
+.pause-paper { width: min(760px, 96vw); max-height: 92vh; overflow-y: auto; }
+.pause-paper h2 { margin: 0; }
+.pause-stat-row {
+  display: flex; flex-wrap: wrap; gap: 14px 22px;
+  margin: 4px 0 14px; padding: 10px 12px;
+  background: rgba(0,0,0,0.04); border: 1px dashed #b5ac97;
+  font-size: 12px;
+}
+.pause-stat-row > div { display: flex; gap: 6px; align-items: baseline; }
+.stat-lbl { color: #6b6455; letter-spacing: 1px; }
+.stat-val { color: var(--ink); font-family: var(--mono); font-weight: 700; }
+.pause-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
+  margin-top: 4px;
+}
+.pause-panel-section {
+  border: 1px solid #b5ac97; background: rgba(255,255,255,0.35);
+  padding: 8px 10px 10px;
+}
+.pause-panel-header {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px;
+  color: #4a443a; border-bottom: 1px dashed #b5ac97;
+  padding-bottom: 4px; margin-bottom: 6px;
+}
+.pause-panel-count {
+  color: #8a8271; font-size: 10px;
+  background: var(--paper-dim); padding: 1px 6px; border-radius: 8px;
+}
+.pause-panel-subtitle { font-size: 10.5px; color: #8a8271; margin-bottom: 4px; }
+.pause-panel-body { display: flex; flex-direction: column; gap: 3px; }
+.pause-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; line-height: 1.5;
+}
+.pause-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pause-lv {
+  font-family: var(--mono); font-size: 10.5px; color: #6b6455;
+  background: var(--paper-dim); padding: 0 5px; border-radius: 3px;
+}
+.pause-cd { font-family: var(--mono); font-size: 10.5px; }
+.pause-empty { font-size: 11px; color: #8a8271; font-style: italic; }
+.pause-rarity-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.35); flex-shrink: 0;
+}
+.pause-weapon-line { font-size: 13px; font-weight: 700; display: flex; gap: 8px; align-items: center; }
+.pause-badge {
+  font-size: 10px; font-family: var(--mono); padding: 0 5px;
+  letter-spacing: 1px;
 }

@@ -105,4 +105,47 @@ export const SKILLS = [
   { id: 'perpetual_slack', name: '永动摸鱼引擎', max: 1, rarity: '橙', persona: 'slacker',
     eff: '大招：累计移动300px（每秒有上限，防瞬移刷值）触发4秒"高铁摸鱼"——海量提速+免疫接触伤害+沿途弹射伤害',
     tag: '我全程没跟你正面打一下，但你们全死了。', apply: m => m.perpetualSlack = true },
+
+  /* ===================================================================
+   * v18 通用 proc 框架示例——8 张 Diablo 风附魔/触发式技能，对应 report §四"缺失的 9 类范式"
+   * 这些技能不带 persona 标签，通吃所有构筑
+   * =================================================================== */
+  { id: 'proc_fire_enchant', name: '火焰附魔·数据泄漏', max: 3, rarity: '蓝',
+    eff: '命中 20%/层概率给目标叠 2 秒燃烧（每秒 4 伤害）',
+    tag: '你的接口在裸奔。',
+    apply: m => m.procs.onHit.push({ chance: .2, effect: 'burn', dps: 4, dur: 2 }) },
+  { id: 'proc_ice_enchant', name: '冰霜附魔·系统卡顿', max: 3, rarity: '蓝',
+    eff: '命中 25%/层概率减速目标 40% 持续 1.5 秒',
+    tag: '你的电脑该重启了。',
+    apply: m => m.procs.onHit.push({ chance: .25, effect: 'chill', dur: 1.5 }) },
+  { id: 'proc_lightning_enchant', name: '雷电附魔·断电通知', max: 3, rarity: '蓝',
+    eff: '暴击 25%/层概率对目标+周围 3 只额外发一次链电（每链 5 伤害）',
+    tag: '本社区将于本周六进行电力检修——但我们提前给你送了。',
+    /* v18 Bug 7 修：40%/层→25%/层，配合 Ultra Temp 57%crit 从 44.7%触发/发 降到 32.4%/发 */
+    apply: m => m.procs.onCrit.push({ chance: .25, effect: 'shock', dmg: 5, chains: 3 }) },
+  { id: 'proc_poison_enchant', name: '毒液附魔·PUA 后遗症', max: 3, rarity: '蓝',
+    eff: '命中 30%/层概率叠中毒 3 秒（每秒 2 伤害，可叠加 dps）',
+    tag: '一次PUA余毒无穷。',
+    apply: m => m.procs.onHit.push({ chance: .3, effect: 'poison', dps: 2, dur: 3 }) },
+  { id: 'proc_lifesteal', name: '吸血附魔·画饼实体化', max: 3, rarity: '蓝',
+    eff: '命中 50%/层概率回复 2 血',
+    tag: '同事的血肉也是KPI。',
+    apply: m => m.procs.onHit.push({ chance: .5, effect: 'heal', amount: 2 }) },
+  { id: 'proc_killShield', name: '击杀护盾·连坐豁免', max: 2, rarity: '绿',
+    eff: '击杀时 60% 概率获得 5 点护盾（最多叠到最大生命）',
+    tag: '干掉别人自动生成豁免文件。',
+    apply: m => m.procs.onKill.push({ chance: .6, effect: 'shield', amount: 5 }) },
+  { id: 'proc_blastKill', name: '连锁裁员·尸爆传染', max: 2, rarity: '紫',
+    eff: '击杀时 40% 概率原地爆炸（60px 半径 15 伤害），可连锁引爆更多敌人',
+    tag: '一份优化通知，波及一片工位。',
+    apply: m => m.procs.onKill.push({ chance: .4, effect: 'blastKill', dmg: 15, r: 60 }) },
+  { id: 'proc_thorns', name: '复仇圆环·法务函件', max: 3, rarity: '绿',
+    eff: '受伤时反弹 30%/层伤害给攻击者（叠加同一 proc，一次受伤只触发一次）',
+    tag: '每一次PUA都会被法务备案。',
+    apply: m => {
+      /* v18 fix: 分层 pct 累加到同一 proc，防止 3 层各自 100% 触发导致 90% 反弹 */
+      let existing = m.procs.onHurt.find(p => p.effect === 'thornsHurt');
+      if (existing) existing.pct += .3;
+      else m.procs.onHurt.push({ chance: 1, effect: 'thornsHurt', pct: .3 });
+    } },
 ];

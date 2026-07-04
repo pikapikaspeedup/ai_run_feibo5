@@ -7,12 +7,17 @@
  * ===================================================================== */
 /* 铁律：基础怪必须比玩家（130 移速）慢，否则无法风筝、成群必死 */
 export const MOBS = {
-  email:  { name: '未读邮件', hp: 11, spd: 105, touch: 2.5, xp: 1.6, jig: false, spr: 'mob_email' },
+  /* v18: email 存在超 5s 自动升级成加急版（spd+25% touch+50%）——静态怪也有生前变化 */
+  email:  { name: '未读邮件', hp: 11, spd: 105, touch: 2.5, xp: 1.6, jig: false, spr: 'mob_email',
+    upgradeAfter: 5, upgradeTo: 'urgent_email' },
+  urgent_email: { name: '加急邮件', hp: 13, spd: 130, touch: 3.7, xp: 2.0, jig: false, spr: 'mob_urgent_email' },
   sticky: { name: '待办便利贴', hp: 20, spd: 60, touch: 4, xp: 2.2, jig: false, spr: 'mob_sticky' },
   cr:     { name: '需求变更单', hp: 14, spd: 95, touch: 3, xp: 1.6, jig: true, split: true, spr: 'mob_cr' },
-  /* 抄送轰炸：死亡 35% 概率分裂出 1 只"已读不回"迷你体（不可再分裂）——第1月就登场 */
+  /* 抄送轰炸：v18 生前每 3.5s 向四周投掷 3 颗低伤追踪弹（弹伤=1.2，触发范围 260px）+ 死亡分裂
+   * ——从"纯追杀撞人型"变成"追杀+远程"双威胁，月1机制多样性 */
   cc_bomb: { name: '抄送轰炸', hp: 8, spd: 130, touch: 2, xp: 1.5, jig: false,
-    split: true, splitChance: .35, splitCount: 1, splitInto: 'read_reply', spr: 'mob_ccbomb' },
+    split: true, splitChance: .35, splitCount: 1, splitInto: 'read_reply', spr: 'mob_ccbomb',
+    fireCd: 3.5, fireBulletDmg: 1.2, fireBulletSpd: 130, fireBulletRange: 300, fireBulletCount: 3, fireTriggerR: 260 },
   /* 已读不回：只作为抄送轰炸的分裂产物出现，不进常规刷怪池 */
   read_reply: { name: '已读不回', hp: 3, spd: 160, touch: 1.5, xp: 1, jig: false, spr: 'mob_readreply' },
   /* 重复造轮子任务：自带独立护盾，破盾前减伤80%，破盾后短暂硬直吃满伤害——教玩家集火而非漫射，第1月登场
@@ -45,6 +50,15 @@ export const MOBS = {
   /* 深夜加班灯：静止环境怪，玩家进入光照范围中易伤（复用 vulnT），易碎、经验较高 */
   night_lamp: { name: '深夜加班灯', hp: 8, spd: 0, touch: 0, xp: 5, jig: false,
     lampR: 80, spr: 'mob_lamp' },
+  /* v18 新增：钓鱼邮件——远程射手，保持 200-260px 距离，周期性发射钓鱼链接减速弹
+   * 引入"远程射手"行为品类，玩家不能纯站桩 */
+  phishing_mail: { name: '钓鱼邮件', hp: 14, spd: 90, touch: 1.5, xp: 3, jig: false,
+    spr: 'mob_phishing', keepDist: 230, keepDistTol: 40,
+    fireCd: 2.5, fireBulletDmg: 3, fireBulletSpd: 200, fireBulletRange: 320, fireBulletSlow: .3, fireTriggerR: 320 },
+  /* v18 新增：死线警报——站桩，周期性在玩家脚下画预警圈 1s 后爆炸
+   * 引入"固定预警型"行为品类，玩家不能纯走 A 键静态位移 */
+  deadline_alarm: { name: '死线警报', hp: 16, spd: 0, touch: 0, xp: 4, jig: false,
+    spr: 'mob_deadline', alarmCd: 5, alarmDelay: 1, alarmR: 55, alarmDmg: 12 },
 };
 
 /* 每月波次：试用期同事未到岗，全部琐事都冲玩家来——月初爆发 + 持续涓流保证割草密度
@@ -53,9 +67,11 @@ export const MOBS = {
 export function waveComp(month) {
   const burst = 12 + 5 * (month - 1);        // 月初爆发波
   const cap = 10 + 2 * month;                 // 场上存活上限（涓流补到这个数）
-  const types = month <= 1 ? ['email', 'cc_bomb', 'reinvent_wheel']
-    : month === 2 ? ['email', 'sticky', 'cc_bomb', 'reinvent_wheel', 'meeting_invite', 'message_recall']
-    : month === 3 ? ['email', 'sticky', 'cc_bomb', 'meeting_invite', 'message_recall', 'urgent_meeting', 'outsourced_army']
+  /* v18: 早期怪物 AI 差异化——月1 从 3 种(邮件/抄送轰炸/护盾任务)扩到 5 种(+钓鱼邮件远程射手+死线警报站桩爆炸圈)
+   * 玩家 60 秒内会同时遭遇:直线追杀+分裂+带远程弹幕的追杀者+远程狙击+固定爆炸区，4-5 种行为品类同时呈现 */
+  const types = month <= 1 ? ['email', 'cc_bomb', 'reinvent_wheel', 'phishing_mail', 'deadline_alarm']
+    : month === 2 ? ['email', 'sticky', 'cc_bomb', 'reinvent_wheel', 'meeting_invite', 'message_recall', 'phishing_mail', 'deadline_alarm']
+    : month === 3 ? ['email', 'sticky', 'cc_bomb', 'meeting_invite', 'message_recall', 'urgent_meeting', 'outsourced_army', 'phishing_mail']
     : month === 4 ? ['email', 'sticky', 'cr', 'cc_bomb', 'meeting_invite', 'urgent_meeting', 'outsourced_army', 'overtime_rework', 'req_review_board']
     : ['email', 'sticky', 'cr', 'cc_bomb', 'meeting_invite', 'urgent_meeting', 'outsourced_army', 'overtime_rework', 'req_review_board', 'read_no_reply_ultimate'];
   return { burst, cap, types };

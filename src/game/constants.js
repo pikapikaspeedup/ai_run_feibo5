@@ -14,7 +14,7 @@ export const TUNE = {
     { at: 420, pct: .05, dps: 48 },
   ],
   xpPerKill: 12,
-  levelNeed: lvl => Math.round(10 * Math.pow(1.26, lvl)),   // 1.22→1.26，配合试用期折扣加深放慢试用期升级节奏
+  levelNeed: lvl => Math.round(10 * Math.pow(1.22, lvl)),   // v18：1.26→1.22 回到原设计值。之前把底数抬高+折扣加深是双重减配，让试用期玩家转正只到 Lv.10 而非设计假设的 Lv.13
   bossHp: 1500,          // 上限参考值；实际按登场时机与玩家等级插值，见 spawnBoss
   bossAt: 360,           // 插值基准；实际触发见 endChecks（t>=300 或存活<=3）
   /* 试用期月度时长：三段式结构（爆发/涓流/考核），考核秒数固定给足现有17秒击杀窗口+缓冲，

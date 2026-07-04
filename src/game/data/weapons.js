@@ -51,6 +51,32 @@ export const WEAPONS = {
     tagline: '阴阳怪气拉满，说出去的话迟早拐回来',
     pat: '回旋镖：去程回程各判一次，能打身后',
     kind: 'boomerang', cd: .95, dmg: 10, spd: 300, range: 140 },
+
+  /* v18 新增 5 种非弹道武器 kind——把副武器/引擎里现成的光环/炮台/地雷/召唤/场地范式提升到主武器 */
+  meta: { name: 'Meta Llama', country: 'US', color: '#3fc2ff',
+    tagline: '开源生态之王，走到哪跟到哪',
+    pat: '贴身持续光环：范围内敌人每 0.25s 吃一次伤害，射程模组扩范围',
+    /* v18 特殊 kind 补强：aura dmg 6→9，因为 aura 不走 spawnBullet 拿不到 multishot echo */
+    kind: 'aura', cd: 0, dmg: 9, range: 70, tickCd: .25 },
+  minimax: { name: 'MiniMax', country: 'CN', color: '#67c98b',
+    tagline: '会议室多开，一人分饰多角',
+    pat: '工位钉子户：部署固定炮台，最多 3 座同时驻场',
+    /* v18 Bug 1 修：dmg 8→6, shotCd 0.55→0.75, 3 炮台协同 DPS 上限从 1210→860 */
+    kind: 'totem', cd: 2.5, dmg: 6, shotCd: .75, deployLife: 12, maxDeploy: 3, range: 190 },
+  moonshot: { name: '月之暗面', country: 'CN', color: '#a0a0ff',
+    tagline: '待办清单，永远都清不完',
+    pat: '尾迹布雷：移动时每 0.8s 在身后留一颗地雷，敌人触发范围爆炸',
+    /* v18 Bug 2 修：dmg 18→12, cd 0.5→0.8, 100% 触发假设下 DPS 上限从 1002→444 */
+    kind: 'mine', cd: .8, dmg: 12, r: 38, fuseT: 1.5, triggerR: 22, range: 40 },
+  zhipu: { name: '智谱清言', country: 'CN', color: '#ff9440',
+    tagline: '实习生军团，专为打杂而生',
+    pat: '实习生军团：召唤 3 名实习生自动索敌开火，寿命 15s',
+    kind: 'summon', cd: 6, dmg: 6, maxSummons: 3, summonLife: 15, summonRange: 180, summonShotCd: .8 },
+  baichuan: { name: '百川智能', country: 'CN', color: '#ffcf33',
+    tagline: '年终大饼，落地时人已经辞职了',
+    pat: '燃烧场地：投放持续 9 秒的燃烧场，dps 32，减速 40%',
+    /* v18 field 补强：dps 22→32，且实现里 dps 乘 lvlMult */
+    kind: 'field', cd: 4.5, dmg: 0, dps: 32, r: 70, life: 9, slow: .4, range: 220 },
 };
 
 export const LEGENDS = {

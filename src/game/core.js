@@ -77,7 +77,11 @@ function defaultMods() {
     onlineResponse: 0, fakeBusy: 0, dodgeBoost: 0, uptimeCertRate: 0, neverOffline: false,
     fakeDiligence: false, fakeDiligencePct: .35, perpetualSlack: false, perpetualSlackTier: 50,
     /* 觉醒专属标记位 */
-    __evoDismissalChain: false, __evoOnlineOffline: false, __evoFakeDiligenceUpgrade: false };
+    __evoDismissalChain: false, __evoOnlineOffline: false, __evoFakeDiligenceUpgrade: false,
+    /* v18 通用 proc 框架——技能/装备只往 procs[hook] 里 push 描述性对象，
+     * 由 applyDamage/killUnit 统一触发。每个 proc 对象至少要有 { chance, effect } 字段。
+     * hook 类型：onHit (打到别人)、onCrit (打出暴击)、onKill (击杀)、onHurt (自己受伤) */
+    procs: { onHit: [], onCrit: [], onKill: [], onHurt: [] } };
 }
 
 /* "牛马"判定：参与大逃杀名次的普通打工人（试用期 PVP 锁定的保护对象） */
@@ -135,7 +139,7 @@ function makeUnit(name, x, y, opts = {}) {
 export const maxHp = u => Math.max(20, u.hpBase + u.mods.maxHpAdd);
 export const wpnDmg = u => {
   const def = wdef(u);
-  const grow = def.kind === 'drone' ? 1.15 : 1.3;   // 僚机靠数量成长
+  const grow = def.kind === 'drone' ? 1.2 : 1.3;   // v18 Bug 3 修：drone 1.15→1.20，Lv.5 lvlMult 1.749→2.074 补齐欠模
   const lvlMult = u.weapon.leg ? 1 : Math.pow(grow, u.weapon.lvl - 1);
   const empower = u.empowerT > 0 ? 1.25 : 1;        // 向上管理光环
   return def.dmg * lvlMult * u.mods.dmg * empower;
@@ -429,6 +433,97 @@ function updateWeapon(u, dt, wantFire, aimA) {
     return;
   }
 
+  /* ---------- v18 新增：5 种非弹道 kind ---------- */
+  /* 贴身持续光环——tick 式伤害，射程模组扩范围（复用 shredder 模式） */
+  if (kind === 'aura') {
+    w.tickT = (w.tickT || 0) - dt * fireRateOf(u);
+    if (w.tickT <= 0) {
+      w.tickT = def.tickCd;
+      const r = def.range * u.mods.range;
+      const dmg2 = wpnDmg(u);
+      let hit = false;
+      for (const t of G.units) {
+        if (!isFoe(u, t) || dist2(u.x, u.y, t.x, t.y) > r * r) continue;
+        applyDamage(t, dmg2, u, { quiet: true });
+        hit = true;
+      }
+      if (hit && u.isPlayer && Math.random() < .3) addParts(u.x + rand(-r/2, r/2), u.y + rand(-r/2, r/2), def.color, 1, 20, .3);
+    }
+    return;
+  }
+  /* 工位钉子户——定期部署固定炮台，最多 3 座；炮台复用 G.turrets 已有的循环 */
+  if (kind === 'totem') {
+    w.deployT = (w.deployT || 0) - dt * fireRateOf(u);
+    const mine = G.turrets.filter(tr => tr.owner === u && tr.kind === 'totem');
+    if (w.deployT <= 0 && mine.length < (def.maxDeploy + (w.lvl >= 3 ? 1 : 0))) {
+      w.deployT = def.cd;
+      G.turrets.push({ x: u.x, y: u.y, owner: u, lv: w.lvl, cd: 0, life: def.deployLife, kind: 'totem',
+        totemDmg: wpnDmg(u), totemShotCd: def.shotCd, totemRange: def.range });
+      addFloat(u.x, u.y - 12, '工位', '#c9c4b4', 6, .5);
+    }
+    return;
+  }
+  /* 尾迹布雷——只在移动中触发，走 explodeAt + 延迟触发（用 G.burns 存活+触发圈） */
+  if (kind === 'mine') {
+    if (u.walkT > .05 && u.standT < .1) {   // 正在移动
+      w.mineT = (w.mineT || 0) - dt * fireRateOf(u);
+      if (w.mineT <= 0) {
+        w.mineT = def.cd;
+        // 用 G.burns 承载"待引爆的地雷"，触发条件在 G.burns 兼容遍历里补充判定
+        G.burns.push({ x: u.x, y: u.y, r: def.triggerR, dps: 0, slow: 0, life: def.fuseT + 6, t: 0,
+          owner: u, color: def.color, mineDmg: wpnDmg(u) * 2.5, mineExplR: def.r, mineArmed: false, mineFuseT: def.fuseT });
+      }
+    }
+    return;
+  }
+  /* 实习生军团——召唤 3 只自动索敌开火的召唤物；复用 isSummon + allyOwner */
+  if (kind === 'summon') {
+    w.summonT = (w.summonT || 0) - dt;
+    const mine = G.units.filter(o => o.isSummon && o.alive && o.allyOwner === u && o.summonType === 'intern');
+    if (w.summonT <= 0 && mine.length < def.maxSummons) {
+      w.summonT = def.cd;
+      const a = rand(0, Math.PI * 2), rr = 30;
+      const intern = makeUnit('实习生', u.x + Math.cos(a) * rr, u.y + Math.sin(a) * rr,
+        { hp: 40, spd: 110, shirt: '#9aa4b5', weaponId: 'chatgpt' });
+      intern.isSummon = true; intern.allyOwner = u; intern.allyUntil = G.t + def.summonLife;
+      intern.summonType = 'intern';
+      intern.r = 4; intern.level = 0;
+      intern.mods.dmg = 0.4 + u.mods.dmg * 0.6;   // v18 补强：主武器加成传承比例 40%→60%，让 satmurbuild 玩家的实习生也硬
+      intern.spr = SPR.mob_army || u.spr;
+      G.units.push(intern);
+      addFloat(u.x, u.y - 12, '实习生上岗', '#ffcf33', 7, .8);
+    }
+    return;
+  }
+  /* 燃烧场地——投放持续场地，dps + 减速 */
+  if (kind === 'field') {
+    if (!wantFire || w.cd > 0) return;
+    w.cd = def.cd;
+    let tx = u.x + Math.cos(aimA) * def.range * u.mods.range;
+    let ty = u.y + Math.sin(aimA) * def.range * u.mods.range;
+    if (u.isPlayer) {
+      const tp = touch.using ? touch.aimTarget : null;
+      if (tp) { tx = tp.x; ty = tp.y; }
+      else if (mouse) {
+        const dx = mouse.x + cam.x - u.x, dy = mouse.y + cam.y - u.y;
+        const dLen = Math.hypot(dx, dy);
+        const cap = def.range * u.mods.range;
+        if (dLen > 10) {
+          const useLen = Math.min(dLen, cap);
+          tx = u.x + dx / dLen * useLen;
+          ty = u.y + dy / dLen * useLen;
+        }
+      }
+    }
+    const r = def.r * u.mods.range;
+    /* v18 field 补强：dps 也乘 lvlMult 让 field 也吃武器等级加成，dps 22→32 base + 让燃烧场 DPS 接近 350 而非 47 */
+    const lvlMultForField = Math.pow(1.3, w.lvl - 1);
+    G.burns.push({ x: tx, y: ty, r, dps: def.dps * u.mods.dmg * lvlMultForField, slow: def.slow, life: def.life, t: 0, owner: u, color: def.color });
+    addFx({ type: 'boom', x: tx, y: ty, r, color: def.color, life: .3 });
+    if (u.isPlayer) SFX.explo();
+    return;
+  }
+
   /* 无限上下文：持续双联横扫光束 */
   if (kind === 'leg_beam') {
     if (wantFire && w.cd <= 0) {
@@ -534,6 +629,97 @@ function updateWeapon(u, dt, wantFire, aimA) {
       break;
   }
   if (u.isPlayer && !['sniper', 'chain'].includes(kind)) SFX.shoot();
+}
+
+/* ---------- v18: 通用 proc 触发器 ----------
+ * proc 描述对象格式：{ chance: 0-1, effect: string, ...params }
+ * effect 类型：
+ *  - 'burn'       : ctx=target，命中时给目标叠一层燃烧 dot（火附魔）
+ *  - 'chill'      : ctx=target，命中时减速目标 40% 持续 params.dur
+ *  - 'shock'      : ctx=target，命中时对目标+周围3只额外发一次链电（雷附魔）
+ *  - 'poison'     : ctx=target，命中时叠 dot（毒附魔）
+ *  - 'heal'       : 攻击者回血 params.amount（吸血）
+ *  - 'shield'     : 攻击者获得 params.amount 护盾（每击杀）
+ *  - 'blastKill'  : 击杀时以目标位置为中心的 AOE 爆炸（每击杀）
+ *  - 'thornsHurt' : 受伤时反弹 params.pct 伤害给攻击者（复仇圆环）
+ */
+function fireProcs(source, hook, ctx) {
+  const list = source.mods.procs && source.mods.procs[hook];
+  if (!list || !list.length) return;
+  /* v18 Bug 6 修：onHit 元素附魔类每次命中最多触发 1 个（4 张满级同装原 99.1% 触发→现按各卡权重挑一个，且非元素类照常独立结算）*/
+  const elementalEffects = { burn: 1, chill: 1, poison: 1, heal: 1 };
+  let elementalFired = false;
+  for (const p of list) {
+    if (hook === 'onHit' && elementalEffects[p.effect]) {
+      if (elementalFired) continue;   // 本次命中已触发过一个元素附魔
+      if (Math.random() > (p.chance || 1)) continue;
+      elementalFired = true;
+    } else {
+      if (Math.random() > (p.chance || 1)) continue;
+    }
+    const t = ctx.target || ctx.victim;
+    switch (p.effect) {
+      case 'burn':
+        if (t && t.alive) G.burns.push({ x: t.x, y: t.y, r: 24, dps: p.dps || 4, slow: 0,
+          life: p.dur || 2, t: 0, owner: source, color: '#ff8f5a' });
+        break;
+      case 'chill':
+        if (t) { t.oaSlowT = Math.max(t.oaSlowT || 0, p.dur || 1.5); }
+        break;
+      case 'shock':
+        if (t && t.alive) {
+          const dmg = (p.dmg || 5) * source.mods.dmg;
+          chainZapNoRecurse(source, t.x, t.y, t, p.chains || 3, dmg, .8);
+        }
+        break;
+      case 'poison':
+        if (t) {
+          t.poisonDps = (t.poisonDps || 0) + (p.dps || 2);
+          t.poisonT = Math.max(t.poisonT || 0, p.dur || 3);
+          t.poisonOwner = source;
+        }
+        break;
+      case 'heal':
+        if (source.alive) source.hp = Math.min(maxHp(source), source.hp + (p.amount || 2));
+        break;
+      case 'shield':
+        source.shield = Math.min((source.shield || 0) + (p.amount || 5), maxHp(source));
+        source.shieldT = 12;
+        break;
+      case 'blastKill':
+        if (ctx.victim) explodeAtNoRecurse(ctx.victim.x, ctx.victim.y, p.r || 60, (p.dmg || 15) * source.mods.dmg, source, '#ff9440');
+        break;
+      case 'thornsHurt':
+        if (ctx.attacker && ctx.attacker.alive && ctx.attacker !== source) {
+          applyDamage(ctx.attacker, (ctx.dmg || 5) * (p.pct || .3), source, { quiet: true, fromProc: true });
+        }
+        break;
+    }
+  }
+}
+
+/* v18 proc 专用：无递归版本，防止 proc 触发的伤害再触发 proc 无限循环 */
+function explodeAtNoRecurse(x, y, r, dmg, owner, color) {
+  addFx({ type: 'boom', x, y, r, color: color || '#ff9440', life: .35 });
+  addParts(x, y, color || '#ff9440', 14, 90, .5);
+  addShake(3);
+  for (const t of G.units) {
+    if (!isFoe(owner, t)) continue;
+    if (dist2(x, y, t.x, t.y) < (r + t.r) * (r + t.r)) applyDamage(t, dmg, owner, { fromProc: true });
+  }
+  if (nearPlayer(x, y)) SFX.explo();
+}
+function chainZapNoRecurse(source, sx, sy, firstTarget, count, dmg, decay) {
+  const hit = new Set([firstTarget]);
+  let curr = firstTarget, cx = sx, cy = sy;
+  for (let i = 0; i < count && curr; i++) {
+    addFx({ type: 'bolt', pts: [{ x: cx, y: cy }, { x: curr.x, y: curr.y - 4 }], color: '#7ec4ff', life: .12 });
+    applyDamage(curr, dmg, source, { quiet: true, fromProc: true });
+    dmg *= decay;
+    cx = curr.x; cy = curr.y;
+    curr = nearestUnit(curr.x, curr.y, 180, o => isFoe(source, o) && !hit.has(o));
+    if (curr) hit.add(curr);
+  }
 }
 
 /* ---------- 爆炸 / 燃烧区 ---------- */
@@ -643,6 +829,13 @@ export function applyDamage(target, raw, attacker, opts = {}) {
   }
   if (attacker && target.bot) { target.bot.provokedT = 4; target.lastAtk = attacker; }
   if (target.isPlayer) { addShake(2); SFX.hurt(); }
+  /* v18: 通用 proc 触发——onHit(攻击者)、onCrit(仅暴击)、onHurt(受伤者)
+   * opts.fromProc 防递归：proc 造成的伤害不再触发新 proc，杜绝无限循环 */
+  if (!opts.fromProc && attacker && attacker.mods && attacker.mods.procs) {
+    fireProcs(attacker, 'onHit', { target, dmg, crit });
+    if (crit) fireProcs(attacker, 'onCrit', { target, dmg });
+  }
+  if (!opts.fromProc && target.mods && target.mods.procs) fireProcs(target, 'onHurt', { attacker, dmg });
   const show = !opts.quiet && (target.isPlayer || (attacker && attacker.isPlayer) || nearPlayer(target.x, target.y));
   if (show) {
     addFloat(target.x + rand(-4, 4), target.y - 16, String(Math.round(dmg)) + (crit ? '!' : ''),
@@ -651,7 +844,7 @@ export function applyDamage(target, raw, attacker, opts = {}) {
     addParts(target.x, target.y - 6, '#ff6a6a', 3, 50, .3);
     if (attacker && attacker.isPlayer) SFX.hit();
   }
-  if (target.hp <= 0) killUnit(target, attacker, opts.cause);
+  if (target.hp <= 0) killUnit(target, attacker, opts.cause, opts);
 }
 
 export function applyCurse(u, id, dur) {
@@ -664,14 +857,14 @@ export function applyCurse(u, id, dur) {
   if (fresh && u.isPlayer) { SFX.deny(); addShake(2); }
 }
 
-function killUnit(victim, killer, cause) {
+function killUnit(victim, killer, cause, opts = {}) {
   /* 试用期晕倒救济：每月一次被同事扶起（试用期是发育期，不该有一波带走）——
      代价是扣经验；正赛阶段无此待遇 */
   if (victim.isPlayer && G.trial.active && !G.trial.revivedThisWave) {
     G.trial.revivedThisWave = true;
-    victim.hp = maxHp(victim) * .6;
+    victim.hp = maxHp(victim) * .4;   // v18：0.6→0.4 免死回血调低，容错度收紧
     victim.invulnT = 1.5;
-    victim.xp = Math.max(0, victim.xp - 10);
+    victim.xp = Math.max(0, victim.xp - Math.round(TUNE.levelNeed(victim.level) * .5));   // v18：扣半级经验（前期几乎无损，后期真的痛）
     for (const m of G.units) {
       if (m.isMob && m.alive && dist2(m.x, m.y, victim.x, victim.y) < 130 * 130) m.alive = false;
     }
@@ -767,6 +960,8 @@ function killUnit(victim, killer, cause) {
         if (nearPlayer(victim.x, victim.y)) addFloat(victim.x, victim.y - 20, `外包大军清空 +${bonus}经验`, '#ffcf33', 8, 1);
       }
     }
+    /* v18: onKill proc 触发（杂鱼击杀也算，让"每击杀触发"类效果在割草时也生效） */
+    if (!opts.fromProc && killer.mods && killer.mods.procs) fireProcs(killer, 'onKill', { victim });
     if (victim.isMob) {
       if (killer.isPlayer) SFX.hit();
       return;   // 杂鱼不进击杀数/连杀/播报
@@ -830,7 +1025,7 @@ export function chipObtainable(id) {
 export function gainXp(u, amt) {
   /* 试用期工资打折：多源经验的总闸，防止发育期通胀吃光整个卡池 */
   if (G && G.trial.active && u.isPlayer) {
-    amt *= .42;   // 0.6→0.42，配合底数1.26与新怪物xp/hp值放慢试用期升级节奏，见设计文档第2节
+    amt *= .55;   // v18：0.42→0.55（配合 levelNeed 底数回到 1.22），转正当刻目标 Lv.11-13 而非 8-10
     G.trialXpEarned = (G.trialXpEarned || 0) + amt * u.mods.xp;   // 记账：转正同事按此补发育
   }
   u.xp += amt * u.mods.xp;
@@ -921,7 +1116,9 @@ export function applyTechPickup(u, id, tier = 1) {
   const t3 = (a, b, c) => [a, b, c][tier - 1];   // 标准 / Pro / Ultra
   if (!t.instant) u.tech[id] = (u.tech[id] || 0) + 1;
   switch (id) {
-    case 'fewshot': m.multishot++; m.echoMult = Math.max(m.echoMult === 1 ? 0 : m.echoMult, t3(.6, .75, .9)); break;
+    /* v18: echoMult 改为软上限公式，杜绝"Ultra Fewshot ×2 → 单次输出 2.8 倍"绕过射速软上限的隐藏乘区
+     * multishot=1: echoMult=0.65（Ultra旧值0.9），multishot=2: 0.733，multishot=3: 0.775——递增速率放缓 */
+    case 'fewshot': m.multishot++; m.echoMult = 0.4 + 0.5 * (1 - 1 / (1 + m.multishot)); break;
     case 'cot': m.pierce += t3(1, 1, 2); break;
     case 'temp': m.crit += t3(.10, .14, .19); break;
     case 'quant': { const v = t3(1.10, 1.15, 1.22); m.fireRate *= v; m.bulletSpd *= v; break; }
@@ -971,12 +1168,21 @@ function updatePersonaSkills(u, dt) {
       u.buffs.fireT = Math.max(u.buffs.fireT, .3); u.buffs.fireM = Math.max(u.buffs.fireM, 1 + layers * .03 * u.mods.uptimeCertRate);
     }
   }
-  /* 假勤奋，真怠工：不受伤满8秒（觉醒后5秒）触发一次全屏伤害清算，随后重置 */
+  /* 假勤奋，真怠工：v18 改为总伤害池模型（perFoe 双封顶）——杜绝"每目标独立×3伤害"的清屏 AoE 翻倍 DPS
+   * 破局分析：旧版对 15 只怪各吃满 wpnDmg×3 = 全屏 wpnDmg*45 相当于 DPS 翻倍
+   * 新版：per-target = min(wpnDmg*3, totalBurst/hitCount)，totalBurst = wpnDmg*8
+   *  - 1 只怪: min(3, 8) = wpnDmg*3（=旧值）
+   *  - 5 只怪: min(3, 1.6) = wpnDmg*1.6（总 8 倍）
+   *  - 15 只怪: min(3, 0.53) = wpnDmg*0.53（总 8 倍，不再线性膨胀）*/
   u.ignoreDmgT -= dt;
   if (u.mods.fakeDiligence && u.noHitT >= (u.mods.__evoFakeDiligenceUpgrade ? 5 : 8)) {
     u.noHitT = 0;
-    const burst = wpnDmg(u) * 3;
-    for (const t of G.units) if (isFoe(u, t) && dist2(u.x, u.y, t.x, t.y) < 260 * 260) applyDamage(t, burst, u, { quiet: false });
+    const foes = G.units.filter(t => isFoe(u, t) && dist2(u.x, u.y, t.x, t.y) < 260 * 260);
+    if (foes.length > 0) {
+      const totalBurst = wpnDmg(u) * 8;
+      const perFoe = Math.min(wpnDmg(u) * 3, totalBurst / foes.length);
+      for (const t of foes) applyDamage(t, perFoe, u, { quiet: false });
+    }
     addFloat(u.x, u.y - 22, '业绩展示！', '#b665ff', 9, 1.2); addShake(3); SFX.fuse();
     if (u.mods.__evoFakeDiligenceUpgrade) { u.ignoreDmgT = 2; addFloat(u.x, u.y - 32, '已读不回状态', '#c9d4e4', 8, 1); }
   }
@@ -1012,7 +1218,10 @@ function updatePersonaSkills(u, dt) {
       t.bottomCutMark -= dt;
       if (t.bottomCutMark <= 0 && t.alive) {
         t.bottomCutMark = 0;
-        explodeAt(t.x, t.y, 110, maxHp(t) * 2, u, '#ff6a6a');
+        /* v18：加分层封顶——普通杂鱼上限 250、T1 精英 250、T2 小 Boss 400、老板 150
+         * 破局分析：旧版无差别 maxHp*2 让每 8s 白嫖秒杀 T2 小 Boss（约 500-800 血 → 一发 1000-1600 直接死）*/
+        const cap = t.isBoss ? 150 : t.eliteTier === 2 ? 400 : t.isElite ? 250 : 250;
+        explodeAt(t.x, t.y, 110, Math.min(maxHp(t) * 2, cap), u, '#ff6a6a');
       }
     }
   }
@@ -1037,8 +1246,11 @@ function updatePersonaSkills(u, dt) {
       addFloat(u.x, u.y - 20, '全员大会召集中…', '#ff9440', 9, 1.4); SFX.zone();
     }
   }
-  /* 永动摸鱼引擎：累计移动300px触发4秒高铁摸鱼——海量提速+免疫接触伤害+沿途弹射 */
+  /* 永动摸鱼引擎：v18 大幅收紧——阈值 300→800、burstT 4→2、加 10 秒硬冷却
+   * 破局分析：旧版触发周期 1.92s 充能 + 4s 无敌 = 6s 循环 → 67% 时间无敌+免费打输出
+   * 新版：约 5s 充能 + 2s 无敌 + 10s 冷却 = 17s 循环 → 12% 时间无敌，回归"大招"稀有感 */
   if (u.mods.perpetualSlack) {
+    u.slackCd = (u.slackCd || 0) - dt;
     if (u.slackBurstT > 0) {
       u.slackBurstT -= dt;
       u.invulnT = Math.max(u.invulnT, dt + .05);
@@ -1053,10 +1265,11 @@ function updatePersonaSkills(u, dt) {
           }
         }
       }
-    } else if (u.slackMiles >= 300) {
+    } else if (u.slackMiles >= 800 && u.slackCd <= 0) {
       u.slackMiles = 0;
-      u.slackBurstT = 4;
-      u.buffs.spdT = Math.max(u.buffs.spdT, 4); u.buffs.spdM = Math.max(u.buffs.spdM, 3);
+      u.slackBurstT = 2;
+      u.slackCd = 10;   // 硬冷却：触发后 10 秒内即使再攒够 800px 也不能再触发
+      u.buffs.spdT = Math.max(u.buffs.spdT, 2); u.buffs.spdM = Math.max(u.buffs.spdM, 3);
       addFloat(u.x, u.y - 20, '高铁摸鱼！', '#ffcf33', 9, 1.2); SFX.dash();
       if (u.mods.__evoOnlineOffline) u.invulnT = Math.max(u.invulnT, .3);
     }
@@ -1371,6 +1584,19 @@ export function update(dt) {
       tr2.stunCd = (tr2.stunCd || 0) - dt;
       continue;
     }
+    /* v18 新增：主武器 totem 类炮台——每 shotCd 自动索敌开火 */
+    if (tr2.kind === 'totem') {
+      if (tr2.cd <= 0) {
+        const t = nearestUnit(tr2.x, tr2.y, tr2.totemRange || 190, o => isFoe(tr2.owner, o));
+        if (t) {
+          tr2.cd = tr2.totemShotCd;
+          spawnBullet(tr2.owner, Math.atan2(t.y - tr2.y, t.x - tr2.x),
+            { x: tr2.x, y: tr2.y - 3, dmg: tr2.totemDmg, spd: 320, range: tr2.totemRange || 190,
+              shape: 'dot', color: '#67c98b', _echo: true });
+        } else tr2.cd = .3;
+      }
+      continue;
+    }
     if (tr2.cd <= 0) {
       const t = nearestUnit(tr2.x, tr2.y, 170, o => isFoe(tr2.owner, o));
       if (t) {
@@ -1413,6 +1639,33 @@ export function update(dt) {
     if (trapped.length >= (bz.ringStun ? 1 : 2)) {
       bz.stunCd = .5;
       for (const t of trapped) t.stunT = Math.max(t.stunT, .5);
+    }
+  }
+  /* v18: proc 毒 dot——每秒 tick 一次 */
+  for (const u of G.units) {
+    if (u.poisonT > 0 && u.alive) {
+      u.poisonT -= dt;
+      u.poisonTickT = (u.poisonTickT || 0) - dt;
+      if (u.poisonTickT <= 0) {
+        u.poisonTickT = 1;
+        applyDamage(u, u.poisonDps, u.poisonOwner || u, { quiet: true, fromProc: true });
+      }
+      if (u.poisonT <= 0) u.poisonDps = 0;
+    }
+  }
+  /* v18 新增：mine 类主武器地雷——burn 记录武装+触发 */
+  for (const bz of G.burns) {
+    if (bz.mineDmg === undefined) continue;
+    if (!bz.mineArmed) {
+      bz.mineArmedT = (bz.mineArmedT || 0) + dt;
+      if (bz.mineArmedT >= bz.mineFuseT) bz.mineArmed = true;
+      continue;
+    }
+    // 已武装：检测敌人踩到触发圈
+    const stepper = G.units.find(t => t.alive && isFoe(bz.owner, t) && dist2(t.x, t.y, bz.x, bz.y) < bz.r * bz.r);
+    if (stepper) {
+      bz.t = bz.life;   // 标记为需要移除
+      explodeAt(bz.x, bz.y, bz.mineExplR, bz.mineDmg, bz.owner, bz.color);
     }
   }
   for (const b of G.burns) b.t += dt;
@@ -1773,10 +2026,15 @@ function spawnBoss() {
   const subN = Object.values(pl.subs).reduce((a, s) => a + s.lv, 0);
   const dstN = pl.distills ? Object.keys(pl.distills).length : 0;
   const bt = Math.max(0, G.t - G.trialOffset);
-  const hp = Math.round(900
+  /* 血量抬升 + dstN 乘算段：让满 build 玩家真的能吃到"半血狂暴"阶段
+   * （原设计：60/90/120/150 系数下满配 hp≈4360，玩家 DPS≈2000 → 狂暴总时长 1-2 秒被踩过）
+   * v18 修正：techN/subN/dstN 60→180/90→220/120→280；再叠 (1+0.15×dstN) 乘算段，
+   * 让蒸馏堆得越多 Boss 越难，形成"越强越危险"的反馈 */
+  const hp = Math.round((900
     + 600 * Math.min(1, Math.max(bt / TUNE.bossAt, pl.level / 15))
-    + 60 * pl.level + 90 * techN + 120 * subN + 150 * dstN
-    + (pl.weapon.leg ? 400 : 0));
+    + 60 * pl.level + 180 * techN + 220 * subN + 280 * dstN
+    + (pl.weapon.leg ? 400 : 0))
+    * (1 + 0.15 * dstN));
   const b = makeUnit('老板', clamp(z.cx + rand(-100, 100), 60, TUNE.world - 60),
     clamp(z.cy + rand(-100, 100), 60, TUNE.world - 60),
     { isBoss: true, hp, spd: 55 });
@@ -2062,12 +2320,20 @@ function spawnLateBots() {
       aimErr: lb.pers === 'juan' ? .07 : lb.pers === 'norm' ? .13 : .2,
       chargeHold: 0, provokedT: 0, strafe: 1,
     } });
-    u.weapon.lvl = clamp(1 + Math.ceil(months * .7), 1, 5);
+    /* v18：追赶发育强化——原公式让同事只到 Lv.6-7、1 模组，DPS 只有玩家 10-15%，PVP 不成立
+     * 现调整目标：同事 DPS ≈ 玩家 40-60%，转正后 PVP 才有真实交火 */
+    u.weapon.lvl = clamp(2 + months, 2, 5);   // 3月档从 Lv.4 直接到 Lv.5
     G.units.push(u);
-    /* 追赶发育锚定玩家实际收益的 60%：玩家刷得越狠，同事补得越多 */
-    gainXp(u, Math.round((G.trialXpEarned || 30 * months) * .6) + randi(0, 20));
-    for (let k = 0; k < Math.floor(months / 2); k++)
-      applyTechPickup(u, pick(Object.keys(TECH).filter(t => !PLAYER_ONLY_TECH.includes(t) && !TECH[t].instant)), rollTier(false));
+    /* 追赶发育锚定玩家实际收益的 85%（原 0.6，同事本来就是玩家的对照组，不该被人为拉低） */
+    gainXp(u, Math.round((G.trialXpEarned || 30 * months) * .85) + randi(0, 25));
+    /* 模组数从 floor(months/2) 提到 months+1（3月档给4个模组，超过玩家试用期均值） */
+    for (let k = 0; k < months + 1; k++)
+      applyTechPickup(u, pick(Object.keys(TECH).filter(t => !PLAYER_ONLY_TECH.includes(t) && !TECH[t].instant)), rollTier(months >= 3));
+    /* months≥2 时 50% 概率给一件 Lv.2 副武器（试用期长的档位同事装备更成型） */
+    if (months >= 2 && Math.random() < .5) {
+      const subId = pick(Object.keys(SUBS));
+      u.subs[subId] = { lv: Math.min(2, SUBS[subId].maxLv), t: 0, ang: rand(0, 6) };
+    }
   }
   G.latentBots = null;
 }
@@ -2108,6 +2374,66 @@ function updateMob(u, dt) {
   if (m.lampR) {
     if (dist2(u.x, u.y, G.player.x, G.player.y) < m.lampR * m.lampR) G.player.vulnT = Math.max(G.player.vulnT, .3);
     return;
+  }
+  /* v18：死线警报——站桩，周期性在玩家脚下画预警圈 1s 后爆炸（复用 explodeAt） */
+  if (m.alarmR) {
+    u.alarmT = (u.alarmT ?? m.alarmCd) - dt;
+    if (u.alarmT <= 0) {
+      u.alarmT = m.alarmCd;
+      const px = G.player.x, py = G.player.y;
+      addFx({ type: 'boom', x: px, y: py, r: m.alarmR, color: '#ffcf33', life: m.alarmDelay });
+      later(() => {
+        if (u.alive) explodeAt(px, py, m.alarmR, m.alarmDmg, u, '#ff4f4f');
+      }, m.alarmDelay * 1000);
+    }
+    return;   // 站桩不移动
+  }
+  /* v18：email 存在超 5s 自动升级为"加急版"——静态怪也有生前变化 */
+  if (m.upgradeAfter) {
+    u.elapsedT = (u.elapsedT || 0) + dt;
+    if (u.elapsedT >= m.upgradeAfter && !u.upgraded) {
+      u.upgraded = true;
+      const newM = MOBS[m.upgradeTo];
+      u.mobType = m.upgradeTo;
+      u.spdBase = newM.spd * (u.spdBase / m.spd);   // 保持个体差异
+      u.mobTouch = newM.touch * (u.mobTouch / m.touch);
+      u.spr = SPR[newM.spr];
+      if (nearPlayer(u.x, u.y)) addFloat(u.x, u.y - 12, '加急！', '#ff4f4f', 7, .8);
+    }
+  }
+  /* v18：cc_bomb 生前每 3.5s 向四周发射低伤追踪弹（当玩家在 260px 范围内时） */
+  if (m.fireCd && m.fireBulletCount) {
+    u.mobFireCd = (u.mobFireCd ?? m.fireCd) - dt;
+    const dPl = dist2(u.x, u.y, G.player.x, G.player.y);
+    if (u.mobFireCd <= 0 && dPl < m.fireTriggerR * m.fireTriggerR) {
+      u.mobFireCd = m.fireCd;
+      for (let i = 0; i < m.fireBulletCount; i++) {
+        const a = (i / m.fireBulletCount) * Math.PI * 2 + rand(-.15, .15);
+        spawnBullet(u, a, { dmg: m.fireBulletDmg, spd: m.fireBulletSpd, range: m.fireBulletRange,
+          shape: 'dot', r: 2, color: '#ff9440', homing: .5 });
+      }
+    }
+  }
+  /* v18：钓鱼邮件——保持距离 200-260px + 周期性发射钓鱼链接减速弹（只做保距+射，不接触伤害） */
+  if (m.keepDist && m.fireBulletSlow) {
+    u.mobFireCd = (u.mobFireCd ?? m.fireCd) - dt;
+    const px = G.player.x, py = G.player.y;
+    const dPl = Math.hypot(u.x - px, u.y - py);
+    const optimalDist = m.keepDist;
+    if (Math.abs(dPl - optimalDist) > m.keepDistTol) {
+      const away = dPl < optimalDist;   // 太近就往外挪
+      const a = Math.atan2(py - u.y, px - u.x) + (away ? Math.PI : 0);
+      moveWithCollide(u, Math.cos(a), Math.sin(a), dt);
+    } else {
+      moveWithCollide(u, 0, 0, dt);
+    }
+    if (u.mobFireCd <= 0 && dPl < m.fireTriggerR) {
+      u.mobFireCd = m.fireCd;
+      const a = Math.atan2(py - u.y, px - u.x);
+      spawnBullet(u, a, { dmg: m.fireBulletDmg, spd: m.fireBulletSpd, range: m.fireBulletRange,
+        shape: 'dot', r: 3, color: '#b665ff', curse: { id: 'overfit', dur: 2 } });
+    }
+    return;   // 保距射手不走"追击撞击"路径
   }
   /* 需求评审会：据点型不移动，给附近其它杂鱼持续刷新"评审通过"加速标记（speedOf 里读取），
      怪死亡后标记自然到期，不需要手动复位，避免"评审会死了但杂鱼还留有加速buff"的残留状态 */
@@ -2285,9 +2611,16 @@ function bossDistill(boss) {
   const fx = EFFECTS[picked.id];
   const effectDesc = fx ? fx() : (bb.dmg *= 1.08, boss.spdBase *= 1.05, '学了个皮毛');
   A.distilled.push(label);
-  /* DPS 镜像：不管玩家靠什么系统变强，Boss 弹幕按其综合火力指数加成 30% 级别 */
-  const pw = pl.mods.dmg * Math.min(4, pl.mods.fireRate) * (1 + pl.mods.multishot * pl.mods.echoMult * .6);
-  bb.dmg = Math.min(3, bb.dmg * (1 + Math.min(.4, .08 * pw)));
+  /* DPS 镜像：不管玩家靠什么系统变强，Boss 弹幕按其综合火力指数加成
+   * v18 修正：原公式漏采样 crit/range/传说三大乘区（Ultra Temp 57% 暴击是玩家最大乘区），补齐；
+   * bb.dmg 累计上限 3→4，单次 min(0.4)→min(0.6)、系数 0.08→0.06（放宽单次上限、放缓单位递增） */
+  const pw = pl.mods.dmg
+    * Math.min(4, pl.mods.fireRate)
+    * (1 + pl.mods.multishot * pl.mods.echoMult * .7)
+    * (1 + pl.mods.crit * 1.5)
+    * pl.mods.range
+    * (pl.weapon.leg ? 1.3 : 1);
+  bb.dmg = Math.min(4, bb.dmg * (1 + Math.min(.6, .06 * pw)));
   addFx({ type: 'bolt', pts: [{ x: pl.x, y: pl.y - 6 }, { x: boss.x, y: boss.y - 10 }], color: '#b665ff', life: .5 });
   addFloat(boss.x, boss.y - 34, `“${pick(BOSS_STEAL_LINES)}”`, '#d9b3ff', 8, 2.2);
   addFeed(`老板 蒸馏了你的「${label}」（${effectDesc}）`, true);
@@ -2314,11 +2647,16 @@ function updateBoss(u, dt) {
     A.distillCount++;
     bossDistill(u);
   }
-  /* 半血狂暴：这季度谁都别想好过 */
-  if (!A.enraged && u.hp < maxHp(u) * .5) {
+  /* 75% 血量狂暴前置 + 8 秒护盾 + 立即释放饼阵——让第二阶段真的存在，不再"触发即毕业"
+   * v18 修正：阈值从 0.5 抬到 0.75；狂暴期 dmgTaken*=0.7；给自身 15%maxHp 8 秒盾；
+   * 强制 pieT=0.3 立刻放一次饼阵，玩家能立刻看到"变形"而不是只听到警告音 */
+  if (!A.enraged && u.hp < maxHp(u) * .75) {
     A.enraged = true;
     A.distillCap = 4; A.distillT = Math.min(A.distillT, 1);
     bb.rate *= 1.4; bb.pies += 6;
+    u.mods.dmgTaken *= .7;
+    u.shield = Math.max(u.shield, maxHp(u) * .15); u.shieldT = 8;
+    A.pieT = Math.min(A.pieT, .3);
     warn('💢 老板进入狂暴："这季度谁都别想好过！"');
     addShake(6); SFX.boss();
     BGM.enrageBoss();
@@ -2339,8 +2677,11 @@ function updateBoss(u, dt) {
       spawnBullet(u, a + i * .18, { dmg: 10 * bb.dmg, spd: 220, range: 350 * bb.range, shape: 'pie', r: 3, color: '#ffcf33', homing: bb.homing });
   }
   if (A.summonT <= 0) {
-    A.summonT = 18;
-    if (G.units.filter(t => t.isHR && t.alive).length < 4) {
+    /* v18：召唤间隔随 Boss 血量线性缩短，Boss 越残召唤越勤（满血 18s → 0血 7.2s）
+     * cap 4 → 6，配合 v18 无尽模式设计里的"HR 潮"节奏 */
+    const hpRatio = u.hp / maxHp(u);
+    A.summonT = 18 * (0.4 + 0.6 * hpRatio);
+    if (G.units.filter(t => t.isHR && t.alive).length < 6) {
       spawnHR(u.x - 24, u.y); spawnHR(u.x + 24, u.y);
       addFeed('老板 拉了两个 HR 进会', true);
     }
@@ -2889,25 +3230,34 @@ function unlockSubSlot() {
 }
 function buildDraftPool(pl) {
   const cards = [];
+  /* v18: 玩家一旦选到第一张带 persona 的技能就锁定人设，此后同人设卡权重×2、异人设卡完全过滤，
+   * 让紫橙质变技能的稀缺性不再被"抽到隔壁人设的卡"稀释。未选任何 persona 卡时对所有 persona 通吃 */
+  const p = pl.persona;
   for (const s of SKILLS) {
+    if (p && s.persona && s.persona !== p) continue;
     if ((pl.skills[s.id] || 0) < s.max && (!s.valid || s.valid(pl)))
-      cards.push({ kind: 'skill', id: s.id, ref: s, name: s.name, eff: s.eff, tag: s.tag, max: s.max, w: 1 });
+      cards.push({ kind: 'skill', id: s.id, ref: s, name: s.name, eff: s.eff, tag: s.tag, max: s.max, w: (s.persona && s.persona === p) ? 2 : 1 });
   }
   const ownedSubs = Object.keys(pl.subs);
   for (const id in SUBS) {
     const def = SUBS[id], cur = pl.subs[id];
+    if (p && def.persona && def.persona !== p) continue;
     /* 决赛圈近战新卡打折（远程对枪环境近战难成型） */
     const meleeLate = ['keyboard', 'monitor', 'shredder'].includes(id) && G.zone.phase >= 2 ? .5 : 1;
+    const personaBonus = (def.persona && def.persona === p) ? 2 : 1;
     if (cur) {
       if (cur.lv < def.maxLv)
-        cards.push({ kind: 'sub', id, name: `${def.name} Lv.${cur.lv + 1}`, eff: def.eff[cur.lv], tag: def.tag, w: 1.6 });   // 在养的优先出现
+        cards.push({ kind: 'sub', id, name: `${def.name} Lv.${cur.lv + 1}`, eff: def.eff[cur.lv], tag: def.tag, w: 1.6 * personaBonus });
     } else if (ownedSubs.length < (pl.subSlotCount || MAX_SUB_SLOTS)) {
-      cards.push({ kind: 'sub', id, name: `新装备：${def.name}`, eff: def.eff[0], tag: def.tag, w: .8 * meleeLate });
+      cards.push({ kind: 'sub', id, name: `新装备：${def.name}`, eff: def.eff[0], tag: def.tag, w: .8 * meleeLate * personaBonus });
     }
   }
   if (!pl.active) {
-    for (const id in ACTIVES)
-      cards.push({ kind: 'active', id, name: `主动技能：${ACTIVES[id].name}`, eff: ACTIVES[id].eff[0], tag: ACTIVES[id].tag, w: .7 });
+    for (const id in ACTIVES) {
+      if (p && ACTIVES[id].persona && ACTIVES[id].persona !== p) continue;
+      const personaBonus = (ACTIVES[id].persona && ACTIVES[id].persona === p) ? 2 : 1;
+      cards.push({ kind: 'active', id, name: `主动技能：${ACTIVES[id].name}`, eff: ACTIVES[id].eff[0], tag: ACTIVES[id].tag, w: .7 * personaBonus });
+    }
   } else if (pl.active.lv < 3) {
     const d = ACTIVES[pl.active.id];
     cards.push({ kind: 'active', id: pl.active.id, name: `${d.name} Lv.${pl.active.lv + 1}`, eff: d.eff[pl.active.lv], tag: d.tag, w: 1.3 });
@@ -2952,6 +3302,17 @@ export function pickLevelChoice(i) {
   const s = levelChoices[i];
   if (!s || state !== 'levelup') return;
   const pl = G.player;
+  /* v18: 玩家选到第一张带 persona 的技能/副武器/主动时，锁定人设——此后卡池按人设过滤 */
+  const personaOf = s.kind === 'skill' && s.ref ? s.ref.persona
+    : s.kind === 'sub' ? SUBS[s.id].persona
+    : s.kind === 'active' ? ACTIVES[s.id].persona
+    : null;
+  if (personaOf && !pl.persona) {
+    pl.persona = personaOf;
+    const label = personaOf === 'optimizer' ? '首席降本增效官' : personaOf === 'slacker' ? '摸鱼表演艺术家' : personaOf;
+    warn(`🎭 人设锁定：${label}——之后的卡池只出同人设卡`);
+    addFloat(pl.x, pl.y - 32, `人设：${label}`, '#ffcf33', 10, 1.6);
+  }
   if (s.kind === 'sub') {
     if (pl.subs[s.id]) pl.subs[s.id].lv++;
     else pl.subs[s.id] = { lv: 1, t: 0, ang: rand(0, 6) };
