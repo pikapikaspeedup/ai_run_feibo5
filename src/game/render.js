@@ -11,6 +11,159 @@ import { SPR, chipSprite, techSprite, FLOOR_TILES } from './sprites.js';
 import { mouse, touch } from './input.js';
 import { getG, getState, cam, maxHp, droneCount, getFireMode } from './core.js';
 import { HIFI, workerFrames } from './hifi.js';
+import deskHiFi from '../assets/generated/desk_test.png';
+import printerHiFi from '../assets/generated/printer.png';
+import coolerHiFi from '../assets/generated/cooler.png';
+import plantHiFi from '../assets/generated/plant.png';
+import whiteboardHiFi from '../assets/generated/whiteboard.png';
+import chairHiFi from '../assets/generated/chair.png';
+import trashHiFi from '../assets/generated/trash.png';
+import cabinetHiFi from '../assets/generated/cabinet.png';
+import drinksHiFi from '../assets/generated/drinks.png';
+import coffeeHiFi from '../assets/generated/coffee_machine.png';
+import sprinklerHiFi from '../assets/generated/sprinkler_head.png';
+import pptHiFi from '../assets/generated/ppt_board.png';
+import phoneHiFi from '../assets/generated/desk_phone.png';
+import sofaHiFi from '../assets/generated/sofa.png';
+import fridgeHiFi from '../assets/generated/fridge.png';
+import bookshelfHiFi from '../assets/generated/bookshelf.png';
+import snackHiFi from '../assets/generated/snack_cabinet.png';
+import printerJammed from '../assets/generated/printer_jammed.png';
+import cabinetLocked from '../assets/generated/cabinet_locked.png';
+const _VARIANT_IMGS = { printer_jammed: null, cabinet_locked: null };
+for (const [key, src] of Object.entries({ printer_jammed: printerJammed, cabinet_locked: cabinetLocked })) {
+  const img = new Image(); img.onload = () => { _VARIANT_IMGS[key] = img; }; img.src = src;
+}
+import deskDmg0 from '../assets/generated/desk_damage_0.png';
+import deskDmg1 from '../assets/generated/desk_damage_1.png';
+import deskDmg2 from '../assets/generated/desk_damage_2.png';
+import deskDmg3 from '../assets/generated/desk_damage_3.png';
+import cabDmg0 from '../assets/generated/cabinet_damage_0.png';
+import cabDmg1 from '../assets/generated/cabinet_damage_1.png';
+import cabDmg2 from '../assets/generated/cabinet_damage_2.png';
+import cabDmg3 from '../assets/generated/cabinet_damage_3.png';
+import prDmg0 from '../assets/generated/printer_damage_0.png';
+import prDmg1 from '../assets/generated/printer_damage_1.png';
+import prDmg2 from '../assets/generated/printer_damage_2.png';
+import prDmg3 from '../assets/generated/printer_damage_3.png';
+import wbDmg0 from '../assets/generated/whiteboard_damage_0.png';
+import wbDmg1 from '../assets/generated/whiteboard_damage_1.png';
+import wbDmg2 from '../assets/generated/whiteboard_damage_2.png';
+import wbDmg3 from '../assets/generated/whiteboard_damage_3.png';
+import clDmg0 from '../assets/generated/cooler_damage_0.png';
+import clDmg1 from '../assets/generated/cooler_damage_1.png';
+import clDmg2 from '../assets/generated/cooler_damage_2.png';
+import clDmg3 from '../assets/generated/cooler_damage_3.png';
+import mwDmg0 from '../assets/generated/microwave_damage_0.png';
+import mwDmg1 from '../assets/generated/microwave_damage_1.png';
+import mwDmg2 from '../assets/generated/microwave_damage_2.png';
+import mwDmg3 from '../assets/generated/microwave_damage_3.png';
+/* v2.0 6 件家具各 4 破损状态：desk/cabinet/printer/whiteboard/cooler/microwave */
+const DAMAGE_SETS = {};
+const _loadSet = (name, srcs) => {
+  DAMAGE_SETS[name] = [null, null, null, null];
+  srcs.forEach((src, i) => {
+    const img = new Image(); img.onload = () => { DAMAGE_SETS[name][i] = img; }; img.src = src;
+  });
+};
+_loadSet('desk',       [deskDmg0, deskDmg1, deskDmg2, deskDmg3]);
+_loadSet('cabinet',    [cabDmg0, cabDmg1, cabDmg2, cabDmg3]);
+_loadSet('printer',    [prDmg0, prDmg1, prDmg2, prDmg3]);
+_loadSet('whiteboard', [wbDmg0, wbDmg1, wbDmg2, wbDmg3]);
+_loadSet('cooler',     [clDmg0, clDmg1, clDmg2, clDmg3]);
+_loadSet('microwave',  [mwDmg0, mwDmg1, mwDmg2, mwDmg3]);
+/* v2.0 Batch 5: 5 more items damage states */
+import chDmg0 from '../assets/generated/chair_damage_0.png';
+import chDmg1 from '../assets/generated/chair_damage_1.png';
+import chDmg2 from '../assets/generated/chair_damage_2.png';
+import chDmg3 from '../assets/generated/chair_damage_3.png';
+import trDmg0 from '../assets/generated/trash_damage_0.png';
+import trDmg1 from '../assets/generated/trash_damage_1.png';
+import trDmg2 from '../assets/generated/trash_damage_2.png';
+import trDmg3 from '../assets/generated/trash_damage_3.png';
+import plDmg0 from '../assets/generated/plant_damage_0.png';
+import plDmg1 from '../assets/generated/plant_damage_1.png';
+import plDmg2 from '../assets/generated/plant_damage_2.png';
+import plDmg3 from '../assets/generated/plant_damage_3.png';
+import drDmg0 from '../assets/generated/drinks_damage_0.png';
+import drDmg1 from '../assets/generated/drinks_damage_1.png';
+import drDmg2 from '../assets/generated/drinks_damage_2.png';
+import drDmg3 from '../assets/generated/drinks_damage_3.png';
+import crDmg0 from '../assets/generated/coat_rack_damage_0.png';
+import crDmg1 from '../assets/generated/coat_rack_damage_1.png';
+import crDmg2 from '../assets/generated/coat_rack_damage_2.png';
+import crDmg3 from '../assets/generated/coat_rack_damage_3.png';
+_loadSet('chair',      [chDmg0, chDmg1, chDmg2, chDmg3]);
+_loadSet('trash',      [trDmg0, trDmg1, trDmg2, trDmg3]);
+_loadSet('plant',      [plDmg0, plDmg1, plDmg2, plDmg3]);
+_loadSet('drinks',     [drDmg0, drDmg1, drDmg2, drDmg3]);
+_loadSet('coat_rack',  [crDmg0, crDmg1, crDmg2, crDmg3]);
+/* v2.0 Batch 6: 4 more items damage states (coffee/sprinkler/ppt/phone) */
+import cmDmg0 from '../assets/generated/coffee_machine_damage_0.png';
+import cmDmg1 from '../assets/generated/coffee_machine_damage_1.png';
+import cmDmg2 from '../assets/generated/coffee_machine_damage_2.png';
+import cmDmg3 from '../assets/generated/coffee_machine_damage_3.png';
+import shDmg0 from '../assets/generated/sprinkler_head_damage_0.png';
+import shDmg1 from '../assets/generated/sprinkler_head_damage_1.png';
+import shDmg2 from '../assets/generated/sprinkler_head_damage_2.png';
+import shDmg3 from '../assets/generated/sprinkler_head_damage_3.png';
+import ppDmg0 from '../assets/generated/ppt_board_damage_0.png';
+import ppDmg1 from '../assets/generated/ppt_board_damage_1.png';
+import ppDmg2 from '../assets/generated/ppt_board_damage_2.png';
+import ppDmg3 from '../assets/generated/ppt_board_damage_3.png';
+import dpDmg0 from '../assets/generated/desk_phone_damage_0.png';
+import dpDmg1 from '../assets/generated/desk_phone_damage_1.png';
+import dpDmg2 from '../assets/generated/desk_phone_damage_2.png';
+import dpDmg3 from '../assets/generated/desk_phone_damage_3.png';
+_loadSet('coffee_machine', [cmDmg0, cmDmg1, cmDmg2, cmDmg3]);
+_loadSet('sprinkler_head', [shDmg0, shDmg1, shDmg2, shDmg3]);
+_loadSet('ppt_board',      [ppDmg0, ppDmg1, ppDmg2, ppDmg3]);
+_loadSet('desk_phone',     [dpDmg0, dpDmg1, dpDmg2, dpDmg3]);
+/* v2.0 Phase C 完整版：sofa/fridge/bookshelf/snack_cabinet damage states */
+import sfDmg0 from '../assets/generated/sofa_damage_0.png';
+import sfDmg1 from '../assets/generated/sofa_damage_1.png';
+import sfDmg2 from '../assets/generated/sofa_damage_2.png';
+import sfDmg3 from '../assets/generated/sofa_damage_3.png';
+import frDmg0 from '../assets/generated/fridge_damage_0.png';
+import frDmg1 from '../assets/generated/fridge_damage_1.png';
+import frDmg2 from '../assets/generated/fridge_damage_2.png';
+import frDmg3 from '../assets/generated/fridge_damage_3.png';
+import bkDmg0 from '../assets/generated/bookshelf_damage_0.png';
+import bkDmg1 from '../assets/generated/bookshelf_damage_1.png';
+import bkDmg2 from '../assets/generated/bookshelf_damage_2.png';
+import bkDmg3 from '../assets/generated/bookshelf_damage_3.png';
+import snDmg0 from '../assets/generated/snack_cabinet_damage_0.png';
+import snDmg1 from '../assets/generated/snack_cabinet_damage_1.png';
+import snDmg2 from '../assets/generated/snack_cabinet_damage_2.png';
+import snDmg3 from '../assets/generated/snack_cabinet_damage_3.png';
+_loadSet('sofa',          [sfDmg0, sfDmg1, sfDmg2, sfDmg3]);
+_loadSet('fridge',        [frDmg0, frDmg1, frDmg2, frDmg3]);
+_loadSet('bookshelf',     [bkDmg0, bkDmg1, bkDmg2, bkDmg3]);
+_loadSet('snack_cabinet', [snDmg0, snDmg1, snDmg2, snDmg3]);
+/* v2.0 §8.18 保险柜 HiFi damage states */
+import svDmg0 from '../assets/generated/safe_damage_0.png';
+import svDmg1 from '../assets/generated/safe_damage_1.png';
+import svDmg2 from '../assets/generated/safe_damage_2.png';
+import svDmg3 from '../assets/generated/safe_damage_3.png';
+_loadSet('safe', [svDmg0, svDmg1, svDmg2, svDmg3]);
+
+/* v2.0 高清家具素材（Codex imagegen 生成，128×128 透明 PNG） */
+const HIFI_PROPS = { desk: null, printer: null, cooler: null, plant: null, whiteboard: null,
+  chair: null, trash: null, cabinet: null, drinks: null,
+  coffee_machine: null, sprinkler_head: null, ppt_board: null, desk_phone: null,
+  sofa: null, fridge: null, bookshelf: null, snack_cabinet: null };
+for (const [key, src] of Object.entries({
+  desk: deskHiFi, printer: printerHiFi, cooler: coolerHiFi, plant: plantHiFi, whiteboard: whiteboardHiFi,
+  chair: chairHiFi, trash: trashHiFi, cabinet: cabinetHiFi, drinks: drinksHiFi,
+  coffee_machine: coffeeHiFi, sprinkler_head: sprinklerHiFi, ppt_board: pptHiFi, desk_phone: phoneHiFi,
+  sofa: sofaHiFi, fridge: fridgeHiFi, bookshelf: bookshelfHiFi, snack_cabinet: snackHiFi,
+})) {
+  const img = new Image();
+  img.onload = () => { HIFI_PROPS[key] = img; };
+  img.src = src;
+}
+/* v2.0 视觉/hitbox 共享自 data/obstacles.js（source of truth）*/
+import { PROP_VISUAL as PROP_SIZE } from './data/obstacles.js';
 
 export function render(ctx) {
   const G = getG(), state = getState();
@@ -35,6 +188,32 @@ export function render(ctx) {
   }
   ctx.strokeStyle = '#0b0d12'; ctx.lineWidth = 6;
   ctx.strokeRect(3, 3, TUNE.world - 6, TUNE.world - 6);
+
+  /* v2.0 Phase F Gap 4 · 关闭 chunk 世界视图叠加：半透明红色蒙层 + "禁"字警告 */
+  if (G.chunkClosed && G.chunkGrid) {
+    const CHUNK_STRIDE_W = 500;
+    for (let cy = 0; cy < G.chunkClosed.length; cy++) {
+      for (let cx = 0; cx < G.chunkClosed[cy].length; cx++) {
+        if (!G.chunkClosed[cy][cx]) continue;
+        const wx = cx * CHUNK_STRIDE_W, wy = cy * CHUNK_STRIDE_W;
+        /* 红色半透明蒙层，脉动闪烁 */
+        const alpha = 0.18 + 0.08 * Math.sin(G.t * 3);
+        ctx.fillStyle = `rgba(255, 79, 79, ${alpha})`;
+        ctx.fillRect(wx, wy, 400, 400);
+        /* 边缘虚线 "禁入" */
+        ctx.strokeStyle = '#ff4f4f'; ctx.lineWidth = 2;
+        ctx.setLineDash([8, 6]);
+        ctx.strokeRect(wx + 4, wy + 4, 392, 392);
+        ctx.setLineDash([]);
+        /* 中央"禁"字 */
+        ctx.fillStyle = 'rgba(255, 79, 79, 0.55)';
+        ctx.font = 'bold 42px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('禁', wx + 200, wy + 200);
+        ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+      }
+    }
+  }
 
   /* 燃烧区 */
   for (const b of G.burns) {
@@ -108,14 +287,213 @@ export function render(ctx) {
 
   /* 单位 + 家具（按 y 排序） */
   const drawables = [];
-  for (const o of G.obstacles) drawables.push({ y: o.sy + 14, draw: () => ctx.drawImage(SPR[o.spr], o.sx, o.sy, 52, 32) });
-  for (const d of G.decor) drawables.push({ y: d.y + 12, draw: () => ctx.drawImage(SPR[d.spr], d.x, d.y) });
+  /* 生成贴图统一走内缩采样：imagegen grid 裁切在部分帧边缘留了 1-2px 亮线残留，
+   * 源矩形四边各内缩 2px 即可全部剔除（对以后重新生成的贴图同样免疫） */
+  const drawSprInset = (img, dx, dy, dw, dh) => {
+    const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    if (iw > 12 && ih > 12) ctx.drawImage(img, 2, 2, iw - 4, ih - 4, dx, dy, dw, dh);
+    else ctx.drawImage(img, dx, dy, dw, dh);
+  };
+  /* v2.0 掩体渲染：破坏后半透明淡出 + 血条随伤害显示；桌子按 hp% 切换 4 状态贴图
+   * 特殊 spr: wall = 会议室墙壁（灰色实体），safe = 老板保险柜（金色金属） */
+  const drawProp = (o, x, y) => {
+    if (o.destroyed) {
+      ctx.globalAlpha = Math.max(0, o.destroyedT / 5);
+    }
+    if (o.spr === 'wall') {
+      ctx.fillStyle = '#5a5654';
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.fillStyle = '#3a3634';
+      ctx.fillRect(o.x, o.y, o.w, 2);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    if (o.spr === 'elevator') {
+      /* v2.0 §3.3 电梯：金属门，开门时中间发光 */
+      ctx.fillStyle = '#3a3a3a';
+      ctx.fillRect(o.x - 2, o.y - 2, o.w + 4, o.h + 4);
+      const opening = o._openT > 0;
+      ctx.fillStyle = opening ? '#38d3e8' : '#6a6a6a';
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(o.x + o.w / 2 - 1, o.y + 4, 2, o.h - 8);
+      ctx.fillStyle = '#c9c4b4';
+      ctx.font = '8px monospace';
+      ctx.fillText(opening ? '开' : '关', o.x + o.w / 2 - 4, o.y - 2);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    if (o.spr === 'bulletin_board') {
+      /* v2.0 §3.3 公告板：软木色板 + 白纸 */
+      ctx.fillStyle = '#6a4a2a';
+      ctx.fillRect(o.x - 1, o.y - 1, o.w + 2, o.h + 2);
+      ctx.fillStyle = '#8a6a4a';
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      /* 三张随机白纸 */
+      ctx.fillStyle = '#f2efe6';
+      ctx.fillRect(o.x + 4, o.y + 4, 8, 10);
+      ctx.fillRect(o.x + 16, o.y + 6, 8, 12);
+      ctx.fillRect(o.x + 8, o.y + 18, 12, 8);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    /* v2.0 §8.18 保险柜：走 DAMAGE_SETS 通道（HiFi 4 状态），血条另绘 */
+    if (o.spr === 'safe' && DAMAGE_SETS.safe && DAMAGE_SETS.safe[0]) {
+      const pct = o.destroyed ? 0 : (o.hp / o.hpMax);
+      const idx = o.destroyed ? 3 : pct > .75 ? 0 : pct > .50 ? 1 : pct > .25 ? 2 : 3;
+      const s = PROP_SIZE.safe;
+      drawSprInset(DAMAGE_SETS.safe[idx] || DAMAGE_SETS.safe[0], x + s.ox, y + s.oy, s.dw, s.dh);
+      if (!o.destroyed && o.hp < o.hpMax) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(o.x, o.y - 6, o.w, 3);
+        ctx.fillStyle = '#ffcf33';
+        ctx.fillRect(o.x, o.y - 6, o.w * (o.hp / o.hpMax), 3);
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
+    const s = PROP_SIZE[o.spr];
+    /* v2.0 §3.4 · 隐藏内容 视觉标识：卡纸打印机 / 上锁文件柜（贴图切换到 variant） */
+    if (o.spr === 'printer' && o.jammed && !o._resumeUsed && _VARIANT_IMGS.printer_jammed) {
+      const s = PROP_SIZE.printer;
+      if (s) { drawSprInset(_VARIANT_IMGS.printer_jammed, x + s.ox, y + s.oy, s.dw, s.dh); ctx.globalAlpha = 1; return; }
+    }
+    if (o.spr === 'cabinet' && o.locked && _VARIANT_IMGS.cabinet_locked) {
+      const s = PROP_SIZE.cabinet;
+      if (s) { drawSprInset(_VARIANT_IMGS.cabinet_locked, x + s.ox, y + s.oy, s.dw, s.dh); ctx.globalAlpha = 1; return; }
+    }
+    /* 4 状态破损贴图：hp% ≥ 75 完好 / 50 轻 / 25 重 / 0 碎（桌子/文件柜）*/
+    const damage4 = DAMAGE_SETS[o.spr];
+    if (damage4 && damage4[0]) {
+      const pct = o.destroyed ? 0 : (o.hp / o.hpMax);
+      const idx = o.destroyed ? 3 : pct > .75 ? 0 : pct > .50 ? 1 : pct > .25 ? 2 : 3;
+      const img = damage4[idx] || damage4[0];
+      if (s) drawSprInset(img, x + s.ox, y + s.oy, s.dw, s.dh);
+      /* v2.0 已搜刮标识：右上角小圆点绿勾徽章，不遮盖桌面主体 */
+      if (o.searched && !o.destroyed && s) {
+        const bx = x + s.ox + s.dw - 6, by = y + s.oy + 6;
+        ctx.fillStyle = 'rgba(20,30,20,.75)';
+        ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#7ee08a';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(bx - 2.5, by); ctx.lineTo(bx - 0.5, by + 2); ctx.lineTo(bx + 2.5, by - 2);
+        ctx.stroke();
+      }
+    } else {
+      const hifi = HIFI_PROPS[o.spr];
+      if (hifi && s) drawSprInset(hifi, x + s.ox, y + s.oy, s.dw, s.dh);
+      else if (SPR[o.spr]) ctx.drawImage(SPR[o.spr], x, y, 52, 32);
+    }
+    ctx.globalAlpha = 1;
+    /* 掩体 hp 条：仅在受伤后显示 */
+    if (!o.destroyed && o.hp < o.hpMax && o.hp > 0) {
+      const bw = s ? s.dw - 4 : 40, bx = x + (s ? s.ox + 2 : 2), by = y + (s ? s.oy - 4 : -4);
+      ctx.fillStyle = '#000'; ctx.fillRect(bx, by, bw, 3);
+      ctx.fillStyle = o.cover === 'T1' ? '#ffcf33' : o.cover === 'T2' ? '#c9a227' : '#7ee08a';
+      ctx.fillRect(bx, by, bw * (o.hp / o.hpMax), 3);
+    }
+  };
+  for (const o of G.obstacles) if (!o.destroyed || o.destroyedT > 0) drawables.push({ y: o.sy + 14, draw: () => drawProp(o, o.sx, o.sy) });
+  for (const d of G.decor) if (!d.destroyed || d.destroyedT > 0) drawables.push({ y: d.y + 12, draw: () => drawProp(d, d.x, d.y) });
   for (const u of G.units) if (u.alive) drawables.push({ y: u.y + 3, draw: () => drawUnit(ctx, G, u) });
   drawables.sort((a, b) => a.y - b.y);
   for (const d of drawables) d.draw();
 
   for (const p of G.projs) drawProj(ctx, G, p);
   for (const f of G.fx) drawFx(ctx, f);
+
+  /* v2.0 §8.20 快递箱视觉：从 y-140 掉到落地点，最后 0.15s 阴影铺开 */
+  if (G.crates) {
+    for (const c of G.crates) {
+      const p = 1 - c.fallT / .8;   // 0 → 1（下落进度）
+      const startY = c.y - 140;
+      const curY = startY + (c.y - startY) * Math.min(1, p * p);   // easeIn 加速下落
+      /* 落点阴影（越靠近越大越深）*/
+      const shadowW = 26 + 22 * p;
+      const shadowA = 0.15 + 0.35 * p;
+      ctx.fillStyle = `rgba(0, 0, 0, ${shadowA})`;
+      ctx.beginPath(); ctx.ellipse(c.x, c.y + 4, shadowW, shadowW * .35, 0, 0, Math.PI * 2); ctx.fill();
+      if (curY < c.y - 4) {
+        /* 箱子本体 */
+        ctx.fillStyle = '#8a5a2a';
+        ctx.fillRect(c.x - 12, curY - 10, 24, 20);
+        ctx.fillStyle = '#a06a3a';
+        ctx.fillRect(c.x - 12, curY - 10, 24, 3);
+        ctx.fillStyle = '#5a3a1a';
+        ctx.fillRect(c.x - 12, curY + 8, 24, 2);
+        /* 十字胶带 */
+        ctx.fillStyle = '#c9a227';
+        ctx.fillRect(c.x - 1.5, curY - 10, 3, 20);
+        ctx.fillRect(c.x - 12, curY - 1.5, 24, 3);
+        /* 掉落轨迹速度线 */
+        ctx.strokeStyle = 'rgba(200, 200, 200, 0.4)';
+        ctx.lineWidth = 1;
+        for (let i = -2; i <= 2; i++) {
+          ctx.beginPath();
+          ctx.moveTo(c.x + i * 4, curY - 22);
+          ctx.lineTo(c.x + i * 4, curY - 12);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  /* v2.0 §3.5 停电事件：屏幕暗化 + 玩家周围可见圆锥 + §8.20 警灯（四角红闪 + 中央旋转警灯）*/
+  if (G.blackoutActiveT > 0) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    /* 挖一个圆形可见区域给玩家 */
+    if (G.player.alive) {
+      const pl = G.player;
+      const px = (pl.x - cam.x), py = (pl.y - cam.y);
+      const grd = ctx.createRadialGradient(px, py, 40, px, py, 100);
+      grd.addColorStop(0, 'rgba(0,0,0,0)');
+      grd.addColorStop(1, 'rgba(0,0,0,0.75)');
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(255,255,255,1)';
+      ctx.beginPath(); ctx.arc(px, py, 100, 0, Math.PI * 2); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    /* §8.20 警灯：四角闪红（2Hz 脉动）+ 顶部中央旋转警灯 icon */
+    const pulse = 0.4 + 0.4 * Math.sin(G.t * 8);
+    ctx.fillStyle = `rgba(255, 30, 30, ${pulse * 0.6})`;
+    const cornerR = 90;
+    /* 四个角径向渐变 */
+    for (const [cx, cy] of [[0, 0], [VIEW_W, 0], [0, VIEW_H], [VIEW_W, VIEW_H]]) {
+      const g2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, cornerR);
+      g2.addColorStop(0, `rgba(255, 30, 30, ${pulse * 0.7})`);
+      g2.addColorStop(1, 'rgba(255, 30, 30, 0)');
+      ctx.fillStyle = g2;
+      ctx.beginPath(); ctx.arc(cx, cy, cornerR, 0, Math.PI * 2); ctx.fill();
+    }
+    /* 顶部中央旋转警灯 icon（红圆 + 旋转扫光）*/
+    const iconX = VIEW_W / 2, iconY = 34;
+    const rot = G.t * 4;
+    /* 底盘 */
+    ctx.fillStyle = '#3a3a3a';
+    ctx.beginPath(); ctx.arc(iconX, iconY, 14, 0, Math.PI * 2); ctx.fill();
+    /* 灯罩 */
+    ctx.fillStyle = `rgba(255, 30, 30, ${0.4 + pulse * 0.6})`;
+    ctx.beginPath(); ctx.arc(iconX, iconY, 10, 0, Math.PI * 2); ctx.fill();
+    /* 旋转扫光 */
+    ctx.save();
+    ctx.translate(iconX, iconY);
+    ctx.rotate(rot);
+    ctx.fillStyle = `rgba(255, 200, 100, ${pulse * 0.9})`;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(38, -8);
+    ctx.lineTo(38, 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+    /* Restore transform */
+    ctx.translate(-cam.x, -cam.y);
+  }
 
   for (const p of G.parts) {
     ctx.globalAlpha = 1 - p.t / p.life;
@@ -518,6 +896,28 @@ export function drawMinimap(mmCtx) {
   const s = 54 / TUNE.world;
   mmCtx.fillStyle = '#0c0e13';
   mmCtx.fillRect(0, 0, 54, 54);
+  /* v2.0 Chunk 系统 minimap 色块：显示 6×6 分区类型 + 关闭 chunk 红叉 */
+  if (G.chunkGrid) {
+    const CS = TUNE.world / 6 * s;   // 每 chunk 在 minimap 上的边长（world 3000 / 6 grid）
+    const COLORS = {
+      cubicles: '#4a3a2a', meeting: '#2a4a6a', break: '#3a6a3a',
+      print: '#6a4a2a', boss: '#7a5a1a', corridor: '#3a3a3a',
+    };
+    for (let cy = 0; cy < 6; cy++) for (let cx = 0; cx < 6; cx++) {
+      const type = G.chunkGrid[cy][cx];
+      mmCtx.fillStyle = COLORS[type] || '#3a3a3a';
+      mmCtx.globalAlpha = .55;
+      mmCtx.fillRect(cx * CS, cy * CS, CS + .5, CS + .5);
+      mmCtx.globalAlpha = 1;
+      if (G.chunkClosed && G.chunkClosed[cy][cx]) {
+        mmCtx.strokeStyle = '#ff4f4f';
+        mmCtx.beginPath();
+        mmCtx.moveTo(cx * CS, cy * CS); mmCtx.lineTo((cx + 1) * CS, (cy + 1) * CS);
+        mmCtx.moveTo((cx + 1) * CS, cy * CS); mmCtx.lineTo(cx * CS, (cy + 1) * CS);
+        mmCtx.stroke();
+      }
+    }
+  }
   const z = G.zone;
   mmCtx.strokeStyle = '#ff4f4f';
   mmCtx.lineWidth = 1;

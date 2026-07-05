@@ -38,5 +38,27 @@ export const SUBS = {
   fitness_ring: { name: '健身环挑战', maxLv: 3, radius: [36, 42, 48], cd: 1.4, persona: 'slacker',
     tag: '边跑边布雷，谁追上来谁倒霉。',
     eff: ['移动时在身后留下短暂定身圈', '定身圈范围提升', '定身圈范围与频率再提升'] },
+
+  /* v2.0 GDD 新增 5 件副武器（复用现有 kind 分派） */
+  todo_mine: { name: '待办清单地雷', maxLv: 3, radius: [40, 46, 54], cd: 1.5,
+    tag: '标"待办"的事情，谁踩上谁背。',
+    eff: ['移动时在身后留下待办地雷（定身+微伤）', '定身圈范围提升', '定身圈范围与频率再提升'],
+    mimic: 'fitness_ring' },
+  auto_script: { name: '自动化脚本终端', maxLv: 3, cd: 6, life: 8, count: [1, 1, 2], shot: [8, 12, 16],
+    tag: 'while true: do_your_job()',
+    eff: ['每 6 秒部署一台自动化终端持续输出', '射击伤害提升', '可同时部署两台'],
+    mimic: 'stapler' },
+  legal_folder: { name: '法务函件夹', maxLv: 3, cd: 3.4, dmg: [24, 34, 48],
+    tag: '一封律师函，胜过千军万马。',
+    eff: ['周期性穿透激光（24 伤害）', '激光 34 伤害', '激光 48 伤害'],
+    mimic: 'laserpen' },
+  competitor_board: { name: '竞品报告板', maxLv: 3, cd: 2.4, dmg: [18, 26, 36],
+    tag: '"友商都这么做了，你为什么不做？"',
+    eff: ['周期性甩报告砸敌（爆炸）', '爆炸伤害提升', '爆炸伤害大幅提升'],
+    mimic: 'mug' },
+  seal_shredder: { name: '公章碎纸机', maxLv: 3, radius: [44, 50, 58], dps: [9, 13, 18],
+    tag: '所有合同、周报、离职单，在这里都是废纸。',
+    eff: ['贴身绞杀光环（每秒 9 伤害）', '范围与伤害提升', '范围与伤害再提升'],
+    mimic: 'shredder' },
 };
 export const MAX_SUB_SLOTS = 3;

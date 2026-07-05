@@ -4,3 +4,8 @@ dist
 *.local
 Archive.zip
 ~$*
+
+# 本地开发临时文件、老代码参考、贴图生成原图（不进 build）
+tmp/
+v2 version/
+src/assets/generated/frame_tests/

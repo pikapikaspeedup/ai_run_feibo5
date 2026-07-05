@@ -51,47 +51,121 @@ export const DISTILLS = {
 /* 机器人不捡的战力模组（留给玩家的成长外挂；蒸馏机制也仅玩家可用） */
 export const PLAYER_ONLY_TECH = ['fewshot', 'attention', 'temp', 'distill'];
 
+/* v2.0 诅咒工位化：技术故障 → 职场状态 */
 export const CURSES = {
-  hallu:    { name: '幻觉', color: '#c58fff', desc: '准星漂移，看啥都不真' },
-  overfit:  { name: '过拟合', color: '#ff8f5a', desc: '移速大减、无法冲刺' },
+  hallu:    { name: '口径混乱', color: '#c58fff', desc: '准星漂移，看啥都不真' },
+  overfit:  { name: '卡权限', color: '#ff8f5a', desc: '移速大减、无法冲刺' },
   repeat:   { name: '复读机', color: '#9ad1ff', desc: '弹道锁死在第一发方向' },
   overflow: { name: '上下文溢出', color: '#ff6a8a', desc: '射速大减' },
 };
 
 export const ELITES = {
-  /* ---- tier 1：训练事故（普通野怪） ---- */
-  hallu:    { name: '幻觉体', tier: 1, hp: 45, spd: 185, touch: 6, curse: 'hallu', curseDur: 6, level: 3,
-    intro: '野生「幻觉体」出没：摸你一下，看啥都不真了',
-    dex: '高速抖动近战，碰到就中「幻觉」（准星漂移）' },
-  overfit:  { name: '过拟合壮汉', tier: 1, hp: 320, spd: 52, touch: 18, curse: 'overfit', curseDur: 7, level: 5,
-    intro: '「过拟合壮汉」进场：在训练集上他无敌',
-    dex: '320 血肉山，撞到就中「过拟合」（减速禁冲刺）' },
-  injector: { name: '提示注入者', tier: 1, hp: 70, spd: 115, ranged: true, level: 4,
-    intro: '「提示注入者」上线：小心他射来的"指令"',
-    dex: '远程放风筝，子弹注入「复读机 / 上下文溢出」' },
-  align:    { name: '对齐守卫', tier: 1, hp: 160, spd: 78, touch: 10, level: 4,
-    intro: '「对齐守卫」巡逻中：正面免疫子弹，请绕后沟通',
+  /* ---- tier 1：常规职场精英 ---- */
+  hallu:    { name: '一本正经胡说八道的专家', tier: 1, hp: 50, spd: 180, touch: 6, curse: 'hallu', curseDur: 6, level: 3,
+    intro: '野生「一本正经胡说八道的专家」出没：他说得越肯定，你越看不清',
+    dex: '高速抖动近战，碰到就中「口径混乱」（准星漂移）' },
+  overfit:  { name: '竞争壁垒专家', tier: 1, hp: 330, spd: 52, touch: 18, curse: 'overfit', curseDur: 7, level: 5,
+    intro: '「竞争壁垒专家」进场：只问壁垒，不看结果',
+    dex: '超厚血肉山，撞到就被卡权限（减速禁冲刺）' },
+  injector: { name: '忽略老板指令的外包同学', tier: 1, hp: 76, spd: 115, ranged: true, level: 4,
+    intro: '「忽略老板指令的外包同学」上线：小心他射来的改口径指令',
+    dex: '远程放风筝，子弹造成复读机 / 上下文溢出' },
+  align:    { name: '法务红线老师', tier: 1, hp: 170, spd: 78, touch: 10, level: 4,
+    intro: '「法务红线老师」巡逻中：正面硬打会被合规挡回去',
     dex: '正面挡下一切子弹——绕后打，或用爆炸/激光/闪电' },
 
-  /* ---- tier 2：职场怪物（随机小 Boss，更稀有更肉，掉双倍模组） ---- */
-  ppt:    { name: 'PPT 大师', tier: 2, hp: 260, spd: 70, ranged: true, level: 6,
-    intro: '📊 小Boss「PPT 大师」开始路演：别在他的演示里走神',
-    dex: '扇形甩幻灯片；黄色光锥预警后是"全屏演示"（高伤+眩晕）——看见就跑' },
-  upman:  { name: '向上管理大师', tier: 2, hp: 220, spd: 95, level: 6,
+  /* ---- tier 2：正式大逃杀小 Boss ---- */
+  ppt:    { name: 'PPT 路演大魔王', tier: 2, hp: 280, spd: 70, ranged: true, level: 6, ai: 'ppt',
+    intro: '📊 小Boss「PPT 路演大魔王」开始路演：别在他的演示里走神',
+    dex: '扇形甩幻灯片；黄色光锥预警后是全屏演示（高伤+眩晕）' },
+  upman:  { name: '向上管理大师', tier: 2, hp: 230, spd: 95, level: 6, ai: 'upman',
     intro: '🤝 小Boss「向上管理大师」进场：他不干活，他让别人更能干',
     dex: '给周围牛马挂攻速移速光环并持续奶血——擒贼先擒他' },
-  snitch: { name: '小报告专家', tier: 2, hp: 150, spd: 125, ranged: true, level: 5,
+  snitch: { name: '小报告专家', tier: 2, hp: 160, spd: 125, ranged: true, level: 5, ai: 'snitch',
     intro: '📝 小Boss「小报告专家」潜伏中：被点名的人会被全办公室围殴',
-    dex: '每 8 秒"打小报告"：被举报者 6 秒内被所有牛马集火' },
-  meeting: { name: '会议发起人', tier: 2, hp: 200, spd: 85, ranged: true, level: 5,
-    intro: '📅 小Boss「会议发起人」上线：这个会明明可以是一封邮件',
-    dex: '扔"日历邀请"制造会议圈——圈内减速掉血，开完才能走' },
-  intern: { name: '卷王实习生', tier: 2, hp: 180, spd: 90, touch: 12, level: 5,
+    dex: '每 8 秒打小报告：被举报者 6 秒内被所有牛马集火' },
+  meeting: { name: '需求评审会主席', tier: 2, hp: 230, spd: 85, ranged: true, level: 5, ai: 'meeting',
+    intro: '📅 小Boss「需求评审会主席」上线：这个需求"很简单"',
+    dex: '扔日历邀请制造会议圈——圈内减速掉血，开完才能走' },
+  intern: { name: '卷王实习生', tier: 2, hp: 190, spd: 90, touch: 12, level: 5, ai: 'intern',
     intro: '🔥 小Boss「卷王实习生」入职：越接近毕业越有狼性',
     dex: '近战冲脸，血越少跑得越快打得越疼——别拖，速杀' },
-  attendance: { name: '考勤主管', tier: 2, hp: 240, spd: 75, level: 6,
-    intro: '⏰ 小Boss「考勤主管」巡楼：站着不动的都算摸鱼',
-    dex: '定期"考勤点名"：黄圈预警内静止者按摸鱼处理（高伤）——动起来！' },
+  attendance: { name: '绩效校准委员会', tier: 2, hp: 260, spd: 75, level: 6, ai: 'attendance',
+    intro: '⏰ 小Boss「绩效校准委员会」巡楼：不是你不优秀，是名额有限',
+    dex: '定期点名，静止者按摸鱼处理（高伤）——动起来！' },
+
+  /* ---- 六个月试用期阶段 Boss（复用 tier2 AI 行为，独立命名+奖励） ---- */
+  hr_screen: { name: 'HR 电话初筛官', tier: 2, hp: 230, spd: 72, ranged: true, level: 5, ai: 'ppt',
+    intro: '☎️ 月度Boss「HR 电话初筛官」上线：你先做个自我介绍',
+    dex: '扇形语音波 + 简历筛选线；绕侧面输出' },
+  demand_chair: { name: '需求评审会主席', tier: 2, hp: 250, spd: 82, ranged: true, level: 6, ai: 'meeting',
+    intro: '📋 月度Boss「需求评审会主席」上线：这个需求真的很简单',
+    dex: '会议圈、返工单和需求改期，考验走位与清场' },
+  tech_debt: { name: '技术债架构师', tier: 2, hp: 300, spd: 68, ranged: true, level: 7, ai: 'injector',
+    intro: '🧱 月度Boss「技术债架构师」上线：老系统不能动，但需求要上',
+    dex: '远程指令弹会锁开火方向/压射速，优先打断' },
+  client_accept: { name: '甲方验收总监', tier: 2, hp: 320, spd: 70, ranged: true, level: 8, ai: 'meeting',
+    intro: '🧾 月度Boss「甲方验收总监」上线：我不认可',
+    dex: '验收圈与重做单交替出现，站圈输出风险更高' },
+  perf_committee: { name: '绩效校准委员会 · 月度', tier: 2, hp: 340, spd: 74, level: 9, ai: 'attendance',
+    intro: '📉 月度Boss「绩效校准委员会」上线：名额有限',
+    dex: '点名、末位约谈和静止惩罚，逼迫持续移动' },
+  warroom: { name: '上线战情室总指挥', tier: 2, hp: 380, spd: 76, ranged: true, level: 10, ai: 'ppt',
+    intro: '🚨 月度Boss「上线战情室总指挥」上线：全员待命，今晚不睡',
+    dex: '幻灯片、全员会议与战情室压迫，是最终 Boss 前的综合演练' },
 };
-export const ELITE_T1 = Object.keys(ELITES).filter(k => ELITES[k].tier === 1);
-export const ELITE_T2 = Object.keys(ELITES).filter(k => ELITES[k].tier === 2);
+/* v2.0 · 16 精英词条：随机词缀，改变名字前缀 + 施加一小段数值/机制修饰
+ * apply(u) 在 spawnElite 里调用，可以直接改 u.hp/spd/mods、加计时器等 */
+export const ELITE_AFFIXES = [
+  { id: 'urgent',   name: '加急',   color: '#ff6a6a', apply: u => { u.spdBase *= 1.25; } },
+  { id: 'rework',   name: '返工',   color: '#ff9440', apply: u => { u.hp = Math.round(u.hp * 1.4); u.hpBase = Math.round((u.hpBase || u.hp) * 1.4); } },
+  { id: 'blame',    name: '甩锅',   color: '#c58fff', apply: u => { u.mods.blameReflect = true; u.mods.blameReflectPct = .3; } },
+  { id: 'cc',       name: '抄送',   color: '#9ad1ff', apply: u => { u._ccOnDeath = true; } },
+  { id: 'trace',    name: '留痕',   color: '#e8e4d8', apply: u => { u.mods.dodge = Math.max(u.mods.dodge || 0, .15); } },
+  { id: 'nopower',  name: '卡权限', color: '#8a8271', apply: u => { u._permaCurse = 'overfit'; } },
+  { id: 'oncall',   name: '值班',   color: '#ffcf33', apply: u => { u.mods.dmg *= 1.2; } },
+  { id: 'chased',   name: '被点名', color: '#ff9edb', apply: u => { u.reportedT = 999; } },
+  { id: 'kpi',      name: 'KPI',    color: '#ffcf33', apply: u => { u.mods.dmg *= 1.15; u.spdBase *= 1.10; } },
+  { id: 'greenpr',  name: '绿灯',   color: '#7ee08a', apply: u => { u.hp = Math.round(u.hp * 1.5); u.mods.dmgTaken = (u.mods.dmgTaken || 1) * .85; } },
+  { id: 'ooo',      name: '临时OOO', color: '#38d3e8', apply: u => { u._oooBlink = true; } },
+  { id: 'buggy',    name: 'Bug',    color: '#ff6a6a', apply: u => { u._buggyProc = .12; } },
+  { id: 'p0',       name: 'P0 事故', color: '#ff4f4f', apply: u => { u.hp = Math.round(u.hp * 1.35); u.mods.dmg *= 1.25; } },
+  { id: 'promoted', name: '刚升职', color: '#ffcf33', apply: u => { u.mods.dmg *= 1.3; u.hp = Math.round(u.hp * 1.15); } },
+  { id: 'reddot',   name: '红点',   color: '#ff4f4f', apply: u => { u._redDotSpawn = true; } },
+  { id: 'okr',      name: 'OKR',    color: '#7ac8ff', apply: u => { u.mods.dmg *= 1.10; u.spdBase *= 1.15; u.hp = Math.round(u.hp * 1.10); } },
+];
+export const ELITE_T1 = ['hallu', 'overfit', 'injector', 'align'];
+export const ELITE_T2 = ['ppt', 'upman', 'snitch', 'meeting', 'intern', 'attendance'];
+export const TRIAL_BOSSES = ['hr_screen', 'demand_chair', 'tech_debt', 'client_accept', 'perf_committee', 'warroom'];
+
+/* v2.0 部门 Boss：正式大逃杀 zone.phase >= 2 后偶发插入 tier-2 池 */
+export const DEPT_BOSSES = {
+  cto_dept: { name: 'CTO · 首席技术官', tier: 2, hp: 380, spd: 66, ranged: true, level: 10, ai: 'ppt',
+    intro: '🧑‍💻 部门Boss「CTO」上线：这段代码谁写的，站出来',
+    dex: '扇形激光 + 深夜 Code Review：站桩即背锅' },
+  cfo_dept: { name: 'CFO · 首席财务官', tier: 2, hp: 340, spd: 70, ranged: true, level: 10, ai: 'meeting',
+    intro: '📉 部门Boss「CFO」上线：这笔预算，不批',
+    dex: '预算冻结圈 + 报销退回弹幕：进圈立刻锅值 +10' },
+  legal_dept: { name: '法务总监', tier: 2, hp: 360, spd: 62, level: 11, ai: 'attendance',
+    intro: '⚖️ 部门Boss「法务总监」上线：这个合规先过我这关',
+    dex: '正面免疫子弹 + 定期发起律师函（远程点名）' },
+  marketing_dept: { name: 'CMO · 市场总监', tier: 2, hp: 300, spd: 92, ranged: true, level: 10, ai: 'snitch',
+    intro: '📣 部门Boss「CMO」上线：明天出个 H5，晚上上线',
+    dex: '舆情火警持续爆 + 全场加对手速度' },
+  pm_dept: { name: '产品总监', tier: 2, hp: 320, spd: 78, ranged: true, level: 11, ai: 'meeting',
+    intro: '📝 部门Boss「产品总监」上线：这个需求不复杂',
+    dex: '需求评审会连开三场 + 频繁改口径（返工单雨）' },
+  cs_dept: { name: '客户成功总监', tier: 2, hp: 340, spd: 74, ranged: true, level: 11, ai: 'ppt',
+    intro: '🎧 部门Boss「客户成功总监」上线：客户又生气了',
+    dex: '甲方情绪波（每 4s 一记高伤扇形）+ 常规验收圈' },
+};
+export const DEPT_BOSS_IDS = Object.keys(DEPT_BOSSES);
+
+/* v2.0 最终 Boss 5 阶段（用 hp% 触发） */
+export const FINAL_BOSS_PHASES = [
+  { hpFrom: 1.0,  hpTo: .80, name: 'P1 · 画饼', intro: '📢 P1 · 画饼：老板说，今年一起干票大的', buff: { pies: 2, rate: 1.0 } },
+  { hpFrom: .80, hpTo: .60, name: 'P2 · 客户插单', intro: '🚨 P2 · 客户插单：临时需求，晚上上线', buff: { pies: 3, rate: 1.15 } },
+  { hpFrom: .60, hpTo: .40, name: 'P3 · 组织架构', intro: '🌀 P3 · 组织架构调整：全员重新汇报', buff: { pies: 4, rate: 1.25, teleport: true } },
+  { hpFrom: .40, hpTo: .20, name: 'P4 · AI 提效背锅', intro: '💣 P4 · AI 提效：你们的活我 AI 都能干', buff: { pies: 5, rate: 1.35, homing: 1 } },
+  { hpFrom: .20, hpTo: 0,   name: 'P5 · 离职答辩', intro: '🔥 P5 · 离职答辩：说清楚为什么没干完', buff: { pies: 6, rate: 1.5, homing: 2, range: 1.2 } },
+];

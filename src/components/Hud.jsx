@@ -102,8 +102,16 @@ export default function Hud() {
   const curses = Object.entries(pl.curses).filter(([, v]) => v > 0);
 
   const phases = G.zonePhases || TUNE.zonePhases;
+  const trialLabel = G.trial.active ? (() => {
+    const t = G.trial;
+    if (t.monthDone) return '考核通过！';
+    if (t.bossThisWave) return '🚨 考核官在场';
+    if (t.bossReadyT > 0) return '💥 考核官登场中…';
+    if (t.subWave > 0) return `第 ${t.subWave}/3 波 · ${t.subWaveKilled}/${t.subWaveTarget}`;
+    return '准备中…';
+  })() : null;
   const nextZone = G.trial.active
-    ? <span style={{ color: '#7ee08a' }}>试用期 第 <b>{G.trial.wave}/{G.trial.months}</b> 月 · {Math.max(0, Math.ceil(G.trial.waveT))}s</span>
+    ? <span style={{ color: '#7ee08a' }}>试用期 第 <b>{G.trial.wave}/{G.trial.months}</b> 月 · {trialLabel}</span>
     : z.shrinking ? <b>红线收缩中！</b>
     : z.phase < phases.length
       ? <>下轮优化 <b>{fmtTime(Math.max(0, phases[z.phase].at - (G.t - G.trialOffset)))}</b></>
@@ -175,11 +183,22 @@ export default function Hud() {
       )}
 
       <div className="hud-bc">
-        {pl.active && (
-          <div id="active-chip" className={pl.activeCd > 0 ? 'cd' : ''}>
-            <b>Q</b>
-            <span>{ACTIVES[pl.active.id].name} Lv{pl.active.lv}</span>
-            <i>{pl.activeCd > 0 ? Math.ceil(pl.activeCd) + 's' : '就绪'}</i>
+        {(pl.activeQ || pl.active) && (() => {
+          const a = pl.activeQ || pl.active;
+          const cd = pl.activeQCd > 0 ? pl.activeQCd : pl.activeCd;
+          return (
+            <div id="active-chip" className={cd > 0 ? 'cd' : ''}>
+              <b>Q</b>
+              <span>{ACTIVES[a.id].name} Lv{a.lv}</span>
+              <i>{cd > 0 ? Math.ceil(cd) + 's' : '就绪'}</i>
+            </div>
+          );
+        })()}
+        {pl.activeE && (
+          <div id="active-chip-e" className={pl.activeECd > 0 ? 'cd' : ''}>
+            <b>E</b>
+            <span>{ACTIVES[pl.activeE.id].name} Lv{pl.activeE.lv}</span>
+            <i>{pl.activeECd > 0 ? Math.ceil(pl.activeECd) + 's' : '就绪'}</i>
           </div>
         )}
         <div id="wpn-card">

@@ -99,4 +99,17 @@ export const SFX = {
   boss: () => { beep(90, 45, .7, 'sawtooth', .1); later(() => beep(70, 40, .8, 'sawtooth', .1), 500); },
   explo: throttled('explo', 55, () => beep(160, 30, .3, 'sawtooth', .06)),
   deny: () => beep(200, 140, .12, 'square', .04),
+  /* v2.0 Phase B SFX 补齐 */
+  /* 座机铃声：叮铃铃铃两长两短 */
+  phoneRing: () => {
+    [880, 660, 880, 660].forEach((f, i) => later(() => beep(f, f * .8, .13, 'sine', .055), i * 140));
+  },
+  /* 命中掩体：清脆的"叮" */
+  obstacleHit: throttled('obstacleHit', 45, () => beep(880, 640, .04, 'triangle', .025)),
+  /* 蘑菇云爆炸：低频轰隆 + 高频爆裂 双层 */
+  mushroom: () => {
+    beep(90, 30, .5, 'sawtooth', .09);
+    later(() => beep(220, 80, .35, 'sawtooth', .06), 60);
+    later(() => beep(600, 200, .18, 'square', .04), 150);
+  },
 };

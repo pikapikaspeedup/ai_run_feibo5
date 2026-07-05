@@ -43,7 +43,10 @@ export default function PauseScreen() {
   const subList = Object.entries(pl.subs || {})
     .map(([id, s]) => ({ id, lv: s.lv, def: SUBS[id] }))
     .filter(x => x.def);
-  const active = pl.active ? { id: pl.active.id, lv: pl.active.lv, def: ACTIVES[pl.active.id], cd: pl.activeCd } : null;
+  const activeQData = (pl.activeQ || pl.active)
+    ? { id: (pl.activeQ || pl.active).id, lv: (pl.activeQ || pl.active).lv, def: ACTIVES[(pl.activeQ || pl.active).id], cd: pl.activeQCd > 0 ? pl.activeQCd : pl.activeCd }
+    : null;
+  const activeEData = pl.activeE ? { id: pl.activeE.id, lv: pl.activeE.lv, def: ACTIVES[pl.activeE.id], cd: pl.activeECd } : null;
   const techList = Object.entries(pl.tech || {})
     .map(([id, count]) => ({ id, count, def: TECH[id] }))
     .filter(x => x.def);
@@ -104,15 +107,29 @@ export default function PauseScreen() {
               ))}
             </PanelSection>
 
-            {/* 主动 */}
-            <PanelSection title="主动技能 (Q键)">
-              {!active && <div className="pause-empty">未装备（升级时抽紫卡）</div>}
-              {active && (
+            {/* Q 槽主动 */}
+            <PanelSection title="Q 战术">
+              {!activeQData && <div className="pause-empty">未装备（升级时抽紫卡）</div>}
+              {activeQData && (
                 <div className="pause-item">
-                  <span className="pause-name">⚡ {active.def.name}</span>
-                  <span className="pause-lv">Lv.{active.lv}</span>
-                  <span className="pause-cd" style={{ color: active.cd > 0 ? '#ff6a6a' : '#7ee08a' }}>
-                    {active.cd > 0 ? `冷却 ${active.cd.toFixed(1)}s` : '就绪'}
+                  <span className="pause-name">⚡ {activeQData.def.name}</span>
+                  <span className="pause-lv">Lv.{activeQData.lv}</span>
+                  <span className="pause-cd" style={{ color: activeQData.cd > 0 ? '#ff6a6a' : '#7ee08a' }}>
+                    {activeQData.cd > 0 ? `冷却 ${activeQData.cd.toFixed(1)}s` : '就绪'}
+                  </span>
+                </div>
+              )}
+            </PanelSection>
+
+            {/* E 槽主动 */}
+            <PanelSection title="E 大招">
+              {!activeEData && <div className="pause-empty">未装备（升级时抽紫卡）</div>}
+              {activeEData && (
+                <div className="pause-item">
+                  <span className="pause-name" style={{ color: '#ffcf33' }}>🌟 {activeEData.def.name}</span>
+                  <span className="pause-lv">Lv.{activeEData.lv}</span>
+                  <span className="pause-cd" style={{ color: activeEData.cd > 0 ? '#ff6a6a' : '#7ee08a' }}>
+                    {activeEData.cd > 0 ? `冷却 ${activeEData.cd.toFixed(1)}s` : '就绪'}
                   </span>
                 </div>
               )}

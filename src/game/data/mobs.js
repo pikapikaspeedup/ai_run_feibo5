@@ -59,11 +59,83 @@ export const MOBS = {
    * 引入"固定预警型"行为品类，玩家不能纯走 A 键静态位移 */
   deadline_alarm: { name: '死线警报', hp: 16, spd: 0, touch: 0, xp: 4, jig: false,
     spr: 'mob_deadline', alarmCd: 5, alarmDelay: 1, alarmR: 55, alarmDmg: 12 },
+
+  /* v2.0 公共事故：正式大逃杀阶段周期出现；处理成功给 KPI，失败涨锅值 */
+  incident_outage: { name: '线上故障公告牌', hp: 86, spd: 0, touch: 0, xp: 14, jig: false, spr: 'mob_deadline',
+    publicIncident: '线上故障', incidentLife: 24, incidentSpawn: 'message_recall', incidentSpawnCd: 4, potFail: 18, kpiReward: 24 },
+  incident_client_rework: { name: '甲方临时改口径', hp: 92, spd: 35, touch: 0, xp: 16, jig: true, spr: 'mob_cr',
+    publicIncident: '甲方临时改', incidentLife: 26, incidentSpawn: 'cr', incidentSpawnCd: 5, potFail: 22, kpiReward: 28 },
+  incident_pr_fire: { name: '舆情火警公关', hp: 74, spd: 0, touch: 0, xp: 15, jig: false, spr: 'mob_urgent',
+    publicIncident: '舆情火警', incidentLife: 22, incidentSpawn: 'cc_bomb', incidentSpawnCd: 4.5, potFail: 20, kpiReward: 26 },
+  incident_acceptance: { name: '客户验收签字圈', hp: 100, spd: 0, touch: 0, xp: 18, jig: false, spr: 'mob_reviewboard',
+    publicIncident: '客户验收', incidentLife: 28, incidentSpawn: 'urgent_meeting', incidentSpawnCd: 5.5, potFail: 24, kpiReward: 32 },
+  /* Phase 3 补齐至 10 种 */
+  incident_budget_cut: { name: '预算砍半通知', hp: 88, spd: 0, touch: 0, xp: 15, jig: false, spr: 'mob_deadline',
+    publicIncident: '预算砍半', incidentLife: 25, incidentSpawn: 'sticky', incidentSpawnCd: 4.5, potFail: 20, kpiReward: 26 },
+  incident_okr_align: { name: 'OKR 对齐会议', hp: 82, spd: 0, touch: 0, xp: 14, jig: false, spr: 'mob_meeting',
+    publicIncident: 'OKR 对齐', incidentLife: 24, incidentSpawn: 'meeting_invite', incidentSpawnCd: 5, potFail: 18, kpiReward: 25 },
+  incident_year_end: { name: '年终述职会', hp: 110, spd: 0, touch: 0, xp: 20, jig: false, spr: 'mob_reviewboard',
+    publicIncident: '年终述职', incidentLife: 30, incidentSpawn: 'urgent_meeting', incidentSpawnCd: 6, potFail: 26, kpiReward: 36 },
+  incident_throttle: { name: '中台限流公告', hp: 78, spd: 0, touch: 0, xp: 15, jig: false, spr: 'mob_urgent',
+    publicIncident: '中台限流', incidentLife: 22, incidentSpawn: 'read_reply', incidentSpawnCd: 3.5, potFail: 20, kpiReward: 26 },
+  incident_competitor: { name: '竞品报告发布', hp: 96, spd: 30, touch: 0, xp: 17, jig: true, spr: 'mob_hunter',
+    publicIncident: '竞品报告', incidentLife: 24, incidentSpawn: 'kpi_hunter', incidentSpawnCd: 8, potFail: 22, kpiReward: 30 },
+  incident_req_review: { name: '需求评审公告', hp: 90, spd: 0, touch: 0, xp: 16, jig: false, spr: 'mob_reviewboard',
+    publicIncident: '需求评审', incidentLife: 26, incidentSpawn: 'cr', incidentSpawnCd: 5, potFail: 22, kpiReward: 28 },
 };
+
+/* v2.0 公共事故池 · 10 种 */
+export const PUBLIC_INCIDENTS = [
+  'incident_outage', 'incident_client_rework', 'incident_pr_fire', 'incident_acceptance',
+  'incident_budget_cut', 'incident_okr_align', 'incident_year_end', 'incident_throttle',
+  'incident_competitor', 'incident_req_review',
+];
 
 /* 每月波次：试用期同事未到岗，全部琐事都冲玩家来——月初爆发 + 持续涓流保证割草密度
  * 月份分层解锁新怪物（不做连续渐变权重，直接按月切换 types 数组）。
  * 机制多样性前移：第1月就有分裂(cc_bomb)+护盾硬直(reinvent_wheel)两种非纯数值怪物。 */
+/* v2.0 试用期 3 波结构 · 每月 3 波敌人 + 月度考核 Boss
+ *   每波：明确的敌人类型 + 数量 → 全部击杀才进入下一波
+ *   打完第 3 波 → 月度小 Boss 登场 → 击杀 Boss → 通关本月
+ *   Boss 击杀 → 立即进入下一月（不再靠时间等）
+ *   同时敌人会一直追杀玩家（现有 mobTarget 已实现）*/
+export function subWaves(month) {
+  /* 每波 [{ type, count }] · 波内敌人必须全部会追击玩家（spd>0）
+   *   deadline_alarm/req_review_board 是站桩型，玩家不追它们波次永远不会推进，禁止入池
+   * v2.1 割草化：数量按"同屏 30-60 只"标定（原 7-14 只/波太空，无割草感）
+   *   波内递增（w1<w2<w3），跨月递增；主力永远是低血 email 系，机制怪做点缀不做主食 */
+  if (month <= 1) return [
+    /* 月 1 · 24/30/38 */
+    [{ type: 'email', count: 18 }, { type: 'cc_bomb', count: 6 }],
+    [{ type: 'email', count: 14 }, { type: 'reinvent_wheel', count: 6 }, { type: 'cc_bomb', count: 10 }],
+    [{ type: 'email', count: 18 }, { type: 'phishing_mail', count: 8 }, { type: 'cc_bomb', count: 12 }],
+  ];
+  if (month === 2) return [
+    /* 30/38/46 */
+    [{ type: 'email', count: 22 }, { type: 'sticky', count: 8 }],
+    [{ type: 'email', count: 14 }, { type: 'cc_bomb', count: 16 }, { type: 'meeting_invite', count: 8 }],
+    [{ type: 'email', count: 18 }, { type: 'message_recall', count: 12 }, { type: 'phishing_mail', count: 10 }, { type: 'sticky', count: 6 }],
+  ];
+  if (month === 3) return [
+    /* 44/48/56 */
+    [{ type: 'email', count: 24 }, { type: 'sticky', count: 10 }, { type: 'cc_bomb', count: 10 }],
+    [{ type: 'email', count: 20 }, { type: 'meeting_invite', count: 10 }, { type: 'message_recall', count: 12 }, { type: 'urgent_meeting', count: 6 }],
+    [{ type: 'email', count: 16 }, { type: 'phishing_mail', count: 12 }, { type: 'cc_bomb', count: 16 }, { type: 'outsourced_army', count: 2 }],
+  ];
+  if (month === 4) return [
+    /* 50/56/62 */
+    [{ type: 'email', count: 26 }, { type: 'cr', count: 12 }, { type: 'sticky', count: 12 }],
+    [{ type: 'email', count: 18 }, { type: 'cc_bomb', count: 18 }, { type: 'meeting_invite', count: 12 }, { type: 'urgent_meeting', count: 8 }],
+    [{ type: 'email', count: 22 }, { type: 'outsourced_army', count: 3 }, { type: 'overtime_rework', count: 10 }, { type: 'phishing_mail', count: 12 }],
+  ];
+  /* 月 5+ · 60/68/80 全料 */
+  return [
+    [{ type: 'email', count: 30 }, { type: 'cr', count: 14 }, { type: 'cc_bomb', count: 16 }],
+    [{ type: 'email', count: 26 }, { type: 'meeting_invite', count: 14 }, { type: 'urgent_meeting', count: 10 }, { type: 'outsourced_army', count: 3 }],
+    [{ type: 'email', count: 30 }, { type: 'overtime_rework', count: 14 }, { type: 'read_no_reply_ultimate', count: 6 }, { type: 'phishing_mail', count: 14 }, { type: 'cc_bomb', count: 16 }],
+  ];
+}
+
 export function waveComp(month) {
   const burst = 12 + 5 * (month - 1);        // 月初爆发波
   const cap = 10 + 2 * month;                 // 场上存活上限（涓流补到这个数）

@@ -5,7 +5,9 @@ export const VIEW_H = 360;
 export const TUNE = {
   playerHp: 100, playerSpeed: 130,
   botCount: 19, botHp: 80,
-  world: 2200, zoneR0: 1050, shrinkDur: 30,
+  /* v2.0 地图重设计 · 严格对齐 map-system-design §10：
+   * 世界 3000×3000，6×6 chunk 网格，每 chunk 400×400 + 100px 走廊 = stride 500 */
+  world: 3000, zoneR0: 1400, shrinkDur: 30,
   zonePhases: [
     { at: 60,  pct: .70, dps: 4 },
     { at: 150, pct: .45, dps: 9 },

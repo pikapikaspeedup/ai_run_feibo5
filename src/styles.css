@@ -43,15 +43,17 @@ canvas#cv {
 .hud-tr { position: absolute; top: 10px; right: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
 .hud-bc { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 8px; }
 
-#active-chip {
+#active-chip, #active-chip-e {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   background: var(--hud-bg); border: 1px solid #b665ff; border-top: 3px solid #b665ff;
   padding: 6px 10px; font-family: var(--sans); font-size: 10px; color: #e6c9ff;
 }
-#active-chip b { font-family: var(--mono); font-size: 14px; color: #fff; }
+#active-chip-e { border-color: #ffcf33; color: #ffe4a0; }
+#active-chip b, #active-chip-e b { font-family: var(--mono); font-size: 14px; color: #fff; }
 #active-chip i { font-style: normal; font-family: var(--mono); color: #b665ff; }
-#active-chip.cd { opacity: .55; }
-#active-chip:not(.cd) i { color: #7ee08a; }
+#active-chip-e i { font-style: normal; font-family: var(--mono); color: #ffcf33; }
+#active-chip.cd, #active-chip-e.cd { opacity: .55; }
+#active-chip:not(.cd) i, #active-chip-e:not(.cd) i { color: #7ee08a; }
 
 .bar { width: 190px; height: 14px; background: #000; border: 2px solid #000; outline: 1px solid rgba(255,255,255,.25); position: relative; }
 .bar > i { display: block; height: 100%; background: var(--danger); transition: width .15s steps(8); }
