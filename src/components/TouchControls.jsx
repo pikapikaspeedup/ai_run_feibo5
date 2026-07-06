@@ -43,6 +43,13 @@ export default function TouchControls() {
               {pl.activeCd > 0 ? Math.ceil(pl.activeCd) + 's' : ACTIVES[pl.active.id].name.slice(0, 2)}
             </div>
           )}
+          {pl && pl.activeE && (
+            <div className={'tbtn' + (pl.activeECd > 0 ? ' cd' : '')} id="btn-active-e-m"
+              style={{ display: 'flex' }}
+              onTouchStart={prevent(() => state === 'playing' && castActive('e'))}>
+              {pl.activeECd > 0 ? Math.ceil(pl.activeECd) + 's' : ACTIVES[pl.activeE.id].name.slice(0, 2)}
+            </div>
+          )}
         </div>
       )}
       <div id="joy" ref={joyRef}>

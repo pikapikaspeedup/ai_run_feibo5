@@ -8,13 +8,14 @@ import { WEAPONS, LEGENDS, findRecipe, recipePartner, wdef } from './data/weapon
 import { SKILLS } from './data/skills.js';
 import { CONSUMABLES } from './data/consumables.js';
 import { TECH, PLAYER_ONLY_TECH, TECH_TIERS, DISTILLS, CURSES, ELITES, ELITE_T1, ELITE_T2, DEPT_BOSSES, DEPT_BOSS_IDS, FINAL_BOSS_PHASES, ELITE_AFFIXES } from './data/tech.js';
-import { MOBS, subWaves, PUBLIC_INCIDENTS } from './data/mobs.js';
+import { MOBS, subWaves, PUBLIC_INCIDENTS, BR_MOB_POOL } from './data/mobs.js';
 import { OBSTACLE_DEFS, PROP_VISUAL, T3_HIDE_RADIUS, T3_HIDE_DUR, T2_BLOCK_CHANCE, DESTROY_FADE_T, REGEN_CD, isDirectFireBullet } from './data/obstacles.js';
 import { CHUNK_SIZE, CHUNK_STRIDE, GRID_N, CHUNK_TYPES, generateChunkGrid } from './data/chunks.js';
 import { pickTemplate, JITTER } from './data/templates.js';
 import { SUBS, MAX_SUB_SLOTS } from './data/subweapons.js';
 import { ACTIVES } from './data/actives.js';
 import { EVOLUTIONS } from './data/evolutions.js';
+import { MILESTONE_TRACKS } from './data/milestones.js';
 import { COPY } from './data/copy.js';
 import { SPR, workerSprite, SHIRT_COLORS } from './sprites.js';
 import { SFX, beep, later, cancelPendingSfx, initAudio } from './audio.js';
@@ -31,7 +32,9 @@ export const getState = () => state;
 function setState(s) {
   const prev = state;
   state = s;
-  if (s !== 'playing') cancelPendingSfx();   // 暂停/结算时掐掉尚未播出的延时音符
+  /* 只在回主菜单时掐延时音符：原来任何非 playing 切换都掐，导致升级/晋升/死亡结算的
+   * 琶音永远在响起前被取消（gainXp 同帧就 openLevelup），玩家从没听到过升职音效 */
+  if (s === 'menu') cancelPendingSfx();
   BGM.onStateChange(s, prev, G);
   bridge.notify();
 }
@@ -66,11 +69,21 @@ export function addParts(x, y, color, n, spd = 60, life = .5) {
 }
 export function addFx(fx) { if (G) { fx.t = 0; G.fx.push(fx); } }
 
+/* 游戏内延迟任务队列：随 G.t 走、暂停自动冻结、切升级界面不丢。
+ * 游戏逻辑的延迟结算一律用它；audio.js 的 later() 是可被取消的真实时间音效计时器，
+ * 之前被误用来调度核爆/延迟爆炸，导致升级/暂停会吞掉这些伤害。 */
+function delay(fn, sec) { if (G) G.delayed.push({ at: G.t + sec, fn }); }
+
+/* 正赛战斗时间：试用期结束的真实时刻做锚（击杀驱动的试用期时长不定，
+ * 旧的 trialOffset 只是开局预算值，用它对表会导致转正瞬间缩圈连跳） */
+const combatT = () => G.t - (G.trialEndT ?? G.trialOffset);
+
 /* ---------- 单位 ---------- */
 function defaultMods() {
   return { spd: 1, dmg: 1, dmgTaken: 1, fireRate: 1, xp: 1, bulletSpd: 1, pierce: 0,
     dodge: 0, killHeal: 0, standRegen: 0, auraDmg: 0, aggro: 1, itemBoost: 1,
     xpPerSec: 0, dropChance: 0, dashCd: 0, lowHpSpd: 0, revive: 0, levelHp: 0, maxHpAdd: 0,
+    activeCdMul: 1,
     multishot: 0, crit: 0, homing: 0, range: 1, rag: 0, sysPrompt: 0,
     echoMult: 1, ragBoost: 1,
     /* 人设四·首席降本增效官 */
@@ -79,8 +92,18 @@ function defaultMods() {
     /* 人设五·摸鱼表演艺术家 */
     onlineResponse: 0, fakeBusy: 0, dodgeBoost: 0, uptimeCertRate: 0, neverOffline: false,
     fakeDiligence: false, fakeDiligencePct: .35, perpetualSlack: false, perpetualSlackTier: 50,
+    /* 人设一·人肉 RLHF 训练员 */
+    executeThreshold: 0, lowHpExecuteDmg: 0, executeBlastChance: 0,
+    thirdHitExecute: false, terminalCrit: false, executionNuke: false, lastWords: false,
+    /* 人设二·万年活人矿·二次入职 */
+    heavyHitReduce: 0, lowHpResist: 0, scarBadge: 0, damageToShield: 0,
+    secondEntry: false, backwater: false, overworkNuke: false,
+    /* 人设三·一人公司 OPC */
+    contractorSummon: 0, summonDmg: 0, summonCdMul: 1, damageToSummon: 0,
+    workstationCache: false, headhunter: false, contractorMatrix: false, severanceNuke: false,
     /* 觉醒专属标记位 */
     __evoDismissalChain: false, __evoOnlineOffline: false, __evoFakeDiligenceUpgrade: false,
+    __evoOutsourceEmpire: false, __evoLayoffWave: false,
     /* v18 通用 proc 框架——技能/装备只往 procs[hook] 里 push 描述性对象，
      * 由 applyDamage/killUnit 统一触发。每个 proc 对象至少要有 { chance, effect } 字段。
      * hook 类型：onHit (打到别人)、onCrit (打出暴击)、onKill (击杀)、onHurt (自己受伤) */
@@ -128,10 +151,14 @@ function makeUnit(name, x, y, opts = {}) {
     linkedTo: null, linkedT: 0, lastDealT: -999,
     /* 人设五·摸鱼表演艺术家 运行时状态 */
     noHitT: 0, slackMiles: 0, slackBurstT: 0, slackTickT: 0, ignoreDmgT: 0,
+    /* 人设三·一人公司 OPC 运行时状态 */
+    opcSummonT: 0, opcFocusTarget: null, opcFocusT: 0, workstationStacks: 0,
+    opcKillMarks: 0, severancePoints: 0, severanceCd: 0, opcMatrixT: 0,
     distills: null, dstT: null,                         // 大模型蒸馏
     /* v2.0 双主动槽：Q 短 CD / E 长 CD；pl.active 保留为 Q 槽别名以兼容旧代码 */
     subs: {}, active: null, activeCd: 0,                // Q 槽（等价 activeQ）
     activeQ: null, activeE: null, activeQCd: 0, activeECd: 0,
+    milestones: {},
     kpi: 0, pot: 0,                                     // v2.0 KPI 抢功 / 锅值 甩锅
     history: [],                                        // 用于版本回滚（3 秒前快照）
     isSummon: false, summonType: null, sumT: 2,         // AI 替身（蒸馏召唤物）
@@ -165,11 +192,17 @@ export const speedOf = u => {
   if (u.curses.overfit > 0) s *= .6;
   if (u.empowerT > 0) s *= 1.15;
   if (u.reviewBoostT > 0) s *= 1.15;   // 需求评审会光环
-  if (u.oaSlowT > 0) s *= .6;          // OA审批流公文包（40% 减速）
+  /* 3秒发言等待区（slowPower）：玩家施加的减速更狠——原字段从未被消费，卡完全无效 */
+  const slowPow = !u.isPlayer && G.player ? (G.player.mods.slowPower || 0) : 0;
+  if (u.oaSlowT > 0) s *= Math.max(.25, .6 - slowPow);   // OA审批流公文包（基础 40% 减速）
   /* v2.0 §3.5 消防警报事件：全场移速 -20%（单独通道，不叠 oaSlow）*/
   if (G.sprinklerActiveT > 0) s *= .8;
   let slow = 1;
-  for (const bz of G.burns) if (isFoe(bz.owner, u) && dist2(u.x, u.y, bz.x, bz.y) < bz.r * bz.r) slow = Math.min(slow, 1 - bz.slow);
+  for (const bz of G.burns) {
+    if (bz.slow <= 0 || !isFoe(bz.owner, u) || dist2(u.x, u.y, bz.x, bz.y) >= bz.r * bz.r) continue;
+    const amp = bz.owner && bz.owner.isPlayer ? (bz.owner.mods.slowPower || 0) : 0;
+    slow = Math.min(slow, 1 - Math.min(.8, bz.slow + amp));
+  }
   return s * slow;
 };
 
@@ -191,7 +224,9 @@ function newGame(trialMonths = 0) {
     trialOffset: Array.from({ length: trialMonths }, (_, i) => TUNE.trialWaveT(i + 1)).reduce((a, b) => a + b, 0),
     /* 割草流清场快：试用期越长，转正后的缩圈时间轴按比例前移 */
     zonePhases: TUNE.zonePhases.map(p => ({ ...p, at: Math.round(p.at * (1 - trialMonths * .06)) })),
-    trialXpEarned: 0, rerollCredits: 0, dryDrafts: 0,
+    trialXpEarned: 0, rerollCredits: 0, dryDrafts: 0, lastMilestoneRareLevel: 0,
+    delayed: [],                                        // 游戏内延迟任务（随 G.t 结算）
+    trialEndT: trialMonths > 0 ? null : 0,              // 试用期实际结束时刻（击杀驱动后时长不定，缩圈/Boss以此为锚）
     t: 0, endT: 0, units: [], projs: [], pickups: [], floats: [], parts: [], fx: [], burns: [],
     obstacles: [], decor: [],
     rooms: [],   // 带门房间登记表 {x0,y0,x1,y1,dx,dy}：mob 寻路经门进出，见 updateMob
@@ -368,7 +403,7 @@ function newGame(trialMonths = 0) {
   }
 
   for (let i = 0; i < 26; i++) spawnChip(g, pick(wIds), 1);
-  for (let i = 0; i < 16; i++) spawnItem(g);
+  for (let i = 0; i < (TUNE.initialItemCount || 16); i++) spawnItem(g);
   for (let i = 0; i < 6; i++) spawnTech(g, pickTechId());
   return g;
 }
@@ -385,9 +420,17 @@ function spawnChip(g, id, lvl, x, y) {
   if (x === undefined) ({ x, y } = randPosInZone(g));
   g.pickups.push({ type: 'chip', id, lvl, x, y, bob: rand(0, 6) });
 }
+const SURVIVAL_ITEM_IDS = [
+  'iced_americano', 'n1_package', 'n2_package', 'teambuild_milktea',
+  'workers_comp', 'sick_leave_note', 'noise_cancel_headset',
+];
+function pickConsumableId(g) {
+  if (g && !g.trial.active && Math.random() < .55) return pick(SURVIVAL_ITEM_IDS);
+  return pick(Object.keys(CONSUMABLES));
+}
 function spawnItem(g, id, x, y) {
   if (x === undefined) ({ x, y } = randPosInZone(g));
-  g.pickups.push({ type: 'item', id: id || pick(Object.keys(CONSUMABLES)), x, y, bob: rand(0, 6) });
+  g.pickups.push({ type: 'item', id: id || pickConsumableId(g), x, y, bob: rand(0, 6) });
 }
 function spawnXp(g, x, y, amt) {
   g.pickups.push({ type: 'xp', amt, x: x + rand(-8, 8), y: y + rand(-8, 8), bob: rand(0, 6) });
@@ -517,7 +560,10 @@ function onObstacleDestroyed(o) {
   }
   /* 5% 上锁文件柜（必掉 distill 大礼）*/
   if (o.spr === 'cabinet' && o.locked) {
-    if (G.player.alive && G.player.distills) {
+    if (G.player.alive) {
+      /* 之前要求 distills 已非空才发奖，恰好堵死"送你第一个蒸馏"的场景（大多数局白开） */
+      G.player.distills = G.player.distills || {};
+      G.player.dstT = G.player.dstT || {};
       const dstIds = Object.keys(DISTILLS).filter(k => !G.player.distills[k]);
       if (dstIds.length) {
         G.player.distills[pick(dstIds)] = true;
@@ -539,14 +585,14 @@ function onObstacleDestroyed(o) {
         size: 3 + Math.random() * 2, t: 0, life: rand(.8, 1.4) });
     }
     /* 顶部一朵大云 */
-    later(() => {
+    delay(() => {
       for (let i = 0; i < 12; i++) {
         const a = Math.random() * Math.PI * 2;
         G.parts.push({ x: cx + Math.cos(a) * 20, y: cy - 40 + Math.sin(a) * 10,
           vx: Math.cos(a) * 20, vy: -10 + Math.sin(a) * 4,
           color: '#c9a227', size: 4, t: 0, life: 1.2 });
       }
-    }, 200);
+    }, .2);
     for (const u of G.units) {
       if (!u.alive || u.isPlayer) continue;
       if (dist2(cx, cy, u.x, u.y) < 60 * 60) applyDamage(u, 30, G.player, { stun: .2 });
@@ -558,8 +604,8 @@ function onObstacleDestroyed(o) {
     G.burns.push({ x: cx, y: cy, r: 60, dps: 0, slow: .4, life: 8, t: 0, owner: G.player, color: '#38d3e8' });
     addFloat(cx, cy - 12, '水漫办公室', '#38d3e8', 7, 1);
   } else if (loot.special === 'heal_aura') {
-    /* 咖啡机爆：20 半径回血光环 6s（design §3.2 数值对齐）*/
-    G.burns.push({ x: cx, y: cy, r: 20, dps: -3, slow: 0, life: 6, t: 0, owner: G.player, color: '#7ee08a' });
+    /* 咖啡机爆：回血光环 6s。半径 20 连站进去都难，放宽到 40；治疗结算见燃烧区循环的 dps<0 分支 */
+    G.burns.push({ x: cx, y: cy, r: 40, dps: -3, slow: 0, life: 6, t: 0, owner: G.player, color: '#7ee08a' });
     addFloat(cx, cy - 12, '咖啡飘香：+3 hp/s', '#7ee08a', 7, 1);
   } else if (loot.special === 'fire_alarm') {
     /* 消防喷淋爆：全场火警 3s，dps 2（design §3.2 手动触发比常规事件强）*/
@@ -630,7 +676,7 @@ function spawnBullet(u, a, opt = {}) {
     dist: 0, maxDist: opt.exact ? opt.range : (opt.range || def.range || 250) * u.mods.range,
     homing: (opt.homing || 0) + u.mods.homing, boom: opt.boom || null,
     boomerang: opt.boomerang || null, zap: opt.zap || null, zapT: 0,
-    stun: opt.stun || 0, fromBoss: !!u.isBoss, curse: opt.curse || null,
+    stun: opt.stun || 0, fromBoss: !!u.isBoss, curse: opt.curse || null, vuln: opt.vuln || null,
     onHitMark: opt.onHitMark || null,
     absorb: opt.absorb || null,
     _peaSubsidy: opt._peaSubsidy || false,
@@ -1208,13 +1254,106 @@ function explodeAt(x, y, r, dmg, owner, color, burn) {
   if (nearPlayer(x, y)) SFX.explo();
 }
 
+function canExecuteTarget(t) {
+  return t && t.alive && !t.isBoss && t.eliteTier !== 2 && !t.isHR;
+}
+function tryExecuteTarget(attacker, target, threshold, label = '处决标注') {
+  if (!attacker || !attacker.isPlayer || !canExecuteTarget(target) || target.hp <= 0) return false;
+  const mh = maxHp(target);
+  if (mh <= 0 || target.hp / mh > threshold) return false;
+  addFloat(target.x, target.y - 22, label, '#ff9440', 9, 1);
+  addParts(target.x, target.y, '#ff9440', 16, 100, .55);
+  killUnit(target, attacker, 'execute', { executed: true });
+  return true;
+}
+
+const OPC_SUMMON_CAP = 10;
+function isOpcSummon(u, owner) {
+  return !!(u && u.alive && u.isSummon && u.opcSummon && (!owner || u.allyOwner === owner));
+}
+function opcSummons(owner) {
+  return G.units.filter(u => isOpcSummon(u, owner));
+}
+function trimOpcSummons(owner) {
+  const mine = opcSummons(owner).sort((a, b) => (a.opcSpawnT || 0) - (b.opcSpawnT || 0));
+  const cap = OPC_SUMMON_CAP + (owner.mods.__evoOutsourceEmpire ? 2 : 0);
+  while (mine.length > cap) {
+    const old = mine.shift();
+    old.alive = false;
+    addParts(old.x, old.y, '#9aa4b5', 8, 70, .4);
+  }
+}
+function recordOpcRetirement(owner, summon, forced = false) {
+  if (!owner || !owner.alive || !summon || !summon.opcSummon) return;
+  if (owner.mods.workstationCache && !forced) owner.workstationStacks = Math.min(5, (owner.workstationStacks || 0) + 1);
+  if (owner.mods.severanceNuke) {
+    const senior = summon.opcSenior ? 2 : 1;
+    owner.severancePoints = Math.min(30, (owner.severancePoints || 0) + senior);
+    if (owner.isPlayer && (owner.severancePoints % 5 === 0 || owner.severancePoints >= 15))
+      addFloat(owner.x, owner.y - 26, `遣散费 ${owner.severancePoints}/15`, '#ffcf33', 8, .9);
+  }
+}
+function spawnOpcSummon(owner, type = 'contractor', opts = {}) {
+  if (!owner || !owner.alive || !G) return null;
+  const a = opts.ang ?? rand(0, Math.PI * 2), rr = opts.dist ?? rand(26, 44);
+  const senior = !!opts.senior;
+  const cache = Math.min(3, owner.workstationStacks || 0);
+  if (cache > 0) owner.workstationStacks--;
+  const typeCfg = {
+    contractor: { name: '外包幻影', hp: 26, spd: 128, dmg: .34, life: 12, color: '#9ad1ff', cd: .72 },
+    clone: { name: '数字分身', hp: 34, spd: 138, dmg: opts.dmg ?? .45, life: opts.life ?? 10, color: '#d9b3ff', cd: .62 },
+    wall: { name: '应届生炮灰墙', hp: 58, spd: 96, dmg: .26, life: 9, color: '#c9c4b4', cd: .9 },
+  }[type] || {};
+  const hpMul = 1 + cache * .25 + (senior ? .65 : 0);
+  const dmgMul = 1 + (owner.mods.summonDmg || 0) + cache * .2 + (senior ? .5 : 0);
+  const s = makeUnit(typeCfg.name || '外包幻影', owner.x + Math.cos(a) * rr, owner.y + Math.sin(a) * rr,
+    { hp: Math.round((typeCfg.hp || 26) * hpMul), spd: typeCfg.spd || 125, shirt: typeCfg.color || '#9ad1ff', weaponId: owner.weapon.id });
+  s.isSummon = true; s.opcSummon = true; s.summonType = `opc_${type}`;
+  s.allyOwner = owner; s.allyUntil = G.t + (opts.life || typeCfg.life || 10);
+  s.r = type === 'wall' ? 6 : 4; s.level = 1; s.sumT = rand(.1, .45);
+  s.opcSpawnT = G.t; s.opcDmgMul = (typeCfg.dmg || .35) * dmgMul;
+  s.opcShotCd = typeCfg.cd || .7; s.opcSenior = senior;
+  s.weapon.id = owner.weapon.id; s.weapon.lvl = Math.max(1, owner.weapon.lvl - (type === 'clone' ? 0 : 1)); s.weapon.leg = null;
+  s.mods.dmg = Math.max(.25, owner.mods.dmg * s.opcDmgMul);
+  s.mods.fireRate = Math.min(1.8, owner.mods.fireRate * (type === 'clone' ? .9 : .7));
+  G.units.push(s);
+  trimOpcSummons(owner);
+  if (owner.isPlayer && Math.random() < .55) addFloat(owner.x, owner.y - 16, senior ? '资深外包上岗' : '外包上线', '#9ad1ff', 7, .7);
+  return s;
+}
+function triggerSeveranceNuke(owner, x = owner.x, y = owner.y, waves = 1) {
+  if (!owner || !owner.alive) return;
+  owner.severanceCd = 30;
+  owner.severancePoints = 0;
+  const base = Math.min(240, 70 + wpnDmg(owner) * 2.2);
+  for (let i = 0; i < waves; i++) {
+    /* 用游戏内延迟队列：原来走 later()（音效计时器），升级/暂停同帧会把后续波次全部取消，
+     * 遣散费扣了核爆却不响 */
+    delay(() => {
+      if (!owner.alive) return;
+      explodeAtNoRecurse(x + rand(-18, 18), y + rand(-18, 18), 160, base * (owner.mods.__evoLayoffWave ? 1.08 : 1), owner, '#9ad1ff');
+    }, i * .16);
+  }
+  for (let i = 0; i < Math.min(3, 1 + waves); i++) spawnOpcSummon(owner, 'contractor', { life: 10 + i });
+  addFloat(owner.x, owner.y - 30, owner.mods.__evoLayoffWave ? '离职潮协议！' : '退休金核爆！', '#9ad1ff', 10, 1.3);
+  addShake(5); SFX.boss();
+}
+
 /* ---------- 伤害 / 诅咒 / 击杀 ---------- */
 export function applyDamage(target, raw, attacker, opts = {}) {
   if (!target.alive || !G) return;
-  if (target.invulnT > 0 && opts.cause !== 'zone') return;   // 画饼护盾挡不住裁员红线
+  /* 欠薪结算（我不下班了）不可被无敌/闪避赖掉——否则掐个病假条时机就能白嫖整段爆发 */
+  const inevitable = opts.cause === 'zone' || opts.cause === 'wage_debt';
+  if (target.invulnT > 0 && !inevitable) return;   // 画饼护盾挡不住裁员红线
   /* 试用期：同事之间互相无敌（PVE 照常） */
   if (G.trial.active && attacker && isWorker(attacker) && isWorker(target)) return;
-  if (target.mods.dodge && opts.cause !== 'zone' && Math.random() < target.mods.dodge) {
+  /* 精英词条：卡权限（固定诅咒）/ Bug（随机诅咒）——之前是全工程无消费的空壳标记 */
+  if (attacker && (attacker._permaCurse || attacker._buggyProc) && target.isPlayer && !inevitable) {
+    if (attacker._permaCurse && Math.random() < .25) applyCurse(target, attacker._permaCurse, 3);
+    if (attacker._buggyProc && Math.random() < attacker._buggyProc) applyCurse(target, pick(['repeat', 'overflow', 'overfit']), 2.5);
+  }
+  const dodgeChance = (target.mods.dodge || 0) + (target.isPlayer && target.opcMatrixT > 0 ? .12 : 0);
+  if (dodgeChance > 0 && !inevitable && Math.random() < Math.min(.9, dodgeChance)) {
     addFloat(target.x, target.y - 14, '甩锅！', '#9aa4b5', 6, .5);
     /* 已读不回学：闪避成功后短暂提速 */
     if (target.isPlayer && target.mods.dodgeBoost) {
@@ -1234,7 +1373,30 @@ export function applyDamage(target, raw, attacker, opts = {}) {
   if (attacker && attacker.mods && attacker.mods.crit && Math.random() < attacker.mods.crit) {
     dmg *= 2; crit = true;
   }
+  if (attacker && attacker.mods && attacker.mods.lowHpExecuteDmg && target.hp / maxHp(target) < .45) {
+    dmg *= 1 + attacker.mods.lowHpExecuteDmg * (1 - attacker.hp / maxHp(attacker));
+  }
+  if (attacker && attacker.mods && attacker.mods.terminalCrit && !opts.fromProc && opts.cause !== 'zone') {
+    if (Math.random() < .2) { dmg *= 3; crit = true; }
+    else dmg *= .82;
+  }
   if (attacker && attacker.buffs && attacker.buffs.dmgT > 0) dmg *= attacker.buffs.dmgM;   // 季度考核倒计时 KPI压力等临时增伤
+  if (target.isPlayer && target.mods.damageToSummon && opts.cause !== 'zone' && opts.cause !== 'wage_debt' && !opts.fromProc) {
+    const mine = opcSummons(target).filter(s => s.hp > maxHp(s) * .15);
+    const transferChance = target.mods.damageToSummon >= 1 ? 1 : Math.min(.7, target.mods.damageToSummon);
+    if (mine.length && Math.random() < transferChance) {
+      const patsy = pick(mine);
+      applyDamage(patsy, dmg * .85, attacker, { quiet: true, fromProc: true });
+      addFloat(target.x, target.y - 18, '分身背锅', '#9ad1ff', 7, .7);
+      return;
+    }
+  }
+  if (target.isPlayer && target.mods.heavyHitReduce && dmg > target.hp * .15)
+    dmg *= 1 - Math.min(.5, target.mods.heavyHitReduce);
+  if (target.isPlayer && target.mods.lowHpResist && target.hp < maxHp(target) * .5) {
+    const mult = target.hp < maxHp(target) * .25 ? 2 : 1;
+    dmg *= 1 - Math.min(.55, target.mods.lowHpResist * mult);
+  }
   /* 办公室政治：小概率给目标挂"内耗标记"，1.5秒后对最近另一敌人溅射本次伤害30% */
   if (attacker && attacker.mods.workplacePolitics && Math.random() < attacker.mods.workplacePolitics) {
     target.politicsT = 1.5; target.politicsDmg = dmg * .3; target.politicsOwner = attacker;
@@ -1245,6 +1407,12 @@ export function applyDamage(target, raw, attacker, opts = {}) {
     const ab = Math.min(target.shield, dmg);
     target.shield -= ab; dmg -= ab;
     addFloat(target.x, target.y - 14, `盾-${Math.round(ab)}`, '#6aa3ff', 6, .5);
+  }
+  if (target.isPlayer && target.noClockoutT > 0 && opts.cause !== 'zone' && opts.cause !== 'wage_debt') {
+    const defer = dmg * .45;
+    dmg -= defer;
+    target.wageDebt = (target.wageDebt || 0) + defer;
+    if (defer > 1) addFloat(target.x, target.y - 28, `欠薪 +${Math.round(defer)}`, '#ffcf33', 6, .5);
   }
   /* 重复造轮子任务：dmgTaken=.2 期间减伤80%持续生效，累计命中的折后伤害耗尽独立护盾计数后破防硬直 */
   if (target.mobShieldHp > 0 && !target.mobShieldBroken) {
@@ -1258,7 +1426,7 @@ export function applyDamage(target, raw, attacker, opts = {}) {
   }
   if (dmg <= 0) return;
   /* 甩锅式反伤：受到的伤害一定概率完全转移给附近受控敌人（觉醒后概率更高，见下方常量） */
-  if (target.isPlayer && target.mods.blameReflect && opts.cause !== 'zone' && !(attacker && attacker.isBoss)) {
+  if ((target.isPlayer || target.isElite) && target.mods.blameReflect && opts.cause !== 'zone' && !(attacker && attacker.isBoss) && !opts.fromProc) {
     if (Math.random() < target.mods.blameReflectPct) {
       const patsy = nearestUnit(target.x, target.y, 90, t => isFoe(target, t) && t.stunT > 0);
       if (patsy) {
@@ -1276,14 +1444,65 @@ export function applyDamage(target, raw, attacker, opts = {}) {
     addFloat(target.x, target.y - 20, '熔断保护！', '#9ad1ff', 9, 1);
     SFX.deny(); addShake(4);
   }
-  if (target.isPlayer) target.noHitT = 0;   // 在线时长认证 / 假勤奋真怠工 计时清零
+  if (target.isPlayer) { target.noHitT = 0; target.fdIdleT = 0; }   // 在线时长认证 / 假勤奋真怠工 各自计时清零
   if (attacker && attacker.isPlayer) attacker.lastDealT = G.t;   // 摸鱼申诉信：判定是否真的没输出
+  if (target.isPlayer && target.mods.lastWords && !target.lastWordsUsed && opts.cause !== 'zone' &&
+      target.hp - dmg <= maxHp(target) * .15) {
+    target.lastWordsUsed = true;
+    const dur = target.mods.__evoLastFeedback ? 8 : 6;
+    target.invulnT = Math.max(target.invulnT, dur);
+    target.buffs.fireT = Math.max(target.buffs.fireT, dur); target.buffs.fireM = Math.max(target.buffs.fireM, target.mods.__evoLastFeedback ? 2.05 : 1.8);
+    target.buffs.dmgT = Math.max(target.buffs.dmgT, dur); target.buffs.dmgM = Math.max(target.buffs.dmgM, target.mods.__evoLastFeedback ? 1.75 : 1.5);
+    dmg = Math.min(dmg, Math.max(0, target.hp - 1));
+    if (target.mods.__evoLastFeedback) target.hp = Math.min(maxHp(target), target.hp + maxHp(target) * .25);
+    addFloat(target.x, target.y - 24, '临终遗言：最后一轮标注', '#ff9440', 10, 1.5);
+    SFX.fuse(); addShake(5);
+  }
   /* 被优化了但我假装没看见（觉醒）：35%概率无视本次伤害，但仍完整走完结算流程（curse/vulnT等副作用不受影响），
      对Boss/小Boss的固定演出类攻击不生效 */
   if (target.isPlayer && target.ignoreDmgT > 0 && !(attacker && (attacker.isBoss || attacker.eliteTier === 2)) && Math.random() < .35) {
     addFloat(target.x, target.y - 14, '已读不回', '#c9d4e4', 7, .6);
   } else {
+    const hpBeforeDamage = target.hp;
     target.hp -= dmg;
+    const actualDmg = Math.max(0, hpBeforeDamage - Math.max(0, target.hp));
+    if (target.isPlayer && actualDmg > 0) {
+      if (target.mods.scarBadge) {
+        target.hardinessLayers = Math.min(10, (target.hardinessLayers || 0) + target.mods.scarBadge);
+        target.hardinessT = 6;
+      }
+      if (target.mods.damageToShield) {
+        const shield = Math.round(actualDmg * Math.min(.5, target.mods.damageToShield));
+        if (shield > 0) {
+          target.shield = Math.min(maxHp(target), (target.shield || 0) + shield);
+          target.shieldT = Math.max(target.shieldT || 0, 2.5);
+        }
+      }
+      if (target.mods.backwater && target.hp < maxHp(target) * .3) {
+        target.backwaterActive = true;
+        target.bloodDebtDamage = (target.bloodDebtDamage || 0) + actualDmg;
+      }
+      if (target.mods.overworkNuke)
+        target.overworkDamage = (target.overworkDamage || 0) + actualDmg;
+    }
+  }
+  if (attacker && attacker.isPlayer && attacker.mods && !opts.fromProc && target.alive && target.hp > 0) {
+    let execThreshold = attacker.mods.executeThreshold || 0;
+    if (attacker.mods.thirdHitExecute && canExecuteTarget(target)) {
+      if (target.rlhfReviewOwner !== attacker) {
+        target.rlhfReviewOwner = attacker;
+        target.rlhfReviewCount = 0;
+      }
+      target.rlhfReviewCount = (target.rlhfReviewCount || 0) + 1;
+      if (target.rlhfReviewCount >= 3) {
+        target.rlhfReviewCount = 0;
+        execThreshold = Math.max(execThreshold, .25);
+        target.vulnT = Math.max(target.vulnT || 0, 1.2);
+        target.vulnBonus = Math.max(target.vulnBonus || 0, .15);
+        addFloat(target.x, target.y - 20, '三审复核', '#ff9440', 8, .8);
+      }
+    }
+    if (execThreshold > 0 && tryExecuteTarget(attacker, target, execThreshold)) return;
   }
   target.hurtT = .15;
   /* 只有重击（>5% 最大生命）才打断"站定"状态——蹭血不再无限打断带薪如厕 */
@@ -1322,6 +1541,7 @@ export function applyDamage(target, raw, attacker, opts = {}) {
 
 export function applyCurse(u, id, dur) {
   if (!u.alive || u.isBoss || u.isElite) return;
+  if (u.debuffImmuneT > 0) return;   // 饮水机的 debuff 免疫窗口
   const fresh = u.curses[id] <= 0;
   if (id === 'repeat' && fresh) u.repeatAim = u.aim;
   u.curses[id] = Math.max(u.curses[id], dur);
@@ -1331,6 +1551,7 @@ export function applyCurse(u, id, dur) {
 }
 
 function killUnit(victim, killer, cause, opts = {}) {
+  if (killer && killer.opcSummon && killer.allyOwner && killer.allyOwner.alive) killer = killer.allyOwner;
   /* 试用期晕倒救济：每月一次被同事扶起（试用期是发育期，不该有一波带走）——
      代价是扣经验；正赛阶段无此待遇 */
   if (victim.isPlayer && G.trial.active && !G.trial.revivedThisWave) {
@@ -1342,6 +1563,7 @@ function killUnit(victim, killer, cause, opts = {}) {
       if (m.isMob && m.alive && dist2(m.x, m.y, victim.x, victim.y) < 130 * 130) {
         m.alive = false;
         if (G.trial.active && m.trialSubWave === G.trial.subWave) G.trial.subWaveKilled++;
+        if (m.mobGroup) m.mobGroup.alive--;   // 绕过 killUnit 的救济清怪也要递减组计数，不然外包大军组奖励永久卡死
       }
     }
     for (const p of G.projs) if (dist2(p.x, p.y, victim.x, victim.y) < 130 * 130) p.dead = true;
@@ -1351,9 +1573,38 @@ function killUnit(victim, killer, cause, opts = {}) {
     SFX.hurt();
     return;
   }
+  if (victim.isPlayer && victim.mods.secondEntry && !victim.secondEntryUsed) {
+    victim.secondEntryUsed = true;
+    victim.hp = Math.max(1, maxHp(victim) * .35);
+    victim.invulnT = Math.max(victim.invulnT, 2.2);
+    victim.xp = Math.max(0, victim.xp - Math.round(TUNE.levelNeed(victim.level) * .1));
+    for (const k in victim.curses) victim.curses[k] = 0;
+    victim.reportedT = 0; victim.oaSlowT = 0; victim.stunT = 0; victim.vulnT = 0;
+    addFloat(victim.x, victim.y - 24, '二次入职：工龄清零，继续上班', '#ffcf33', 10, 1.6);
+    addFeed('你被返聘成更便宜的外包，原地二次入职', true);
+    addParts(victim.x, victim.y, '#ffcf33', 24, 110, .8);
+    if (victim.mods.__evoShiftChange) {
+      let healed = 0;
+      for (const t of G.units) {
+        if (!isFoe(victim, t) || t.isBoss || dist2(victim.x, victim.y, t.x, t.y) > 240 * 240) continue;
+        const a = Math.atan2(t.y - victim.y, t.x - victim.x);
+        t.x = victim.x + Math.cos(a) * 46;
+        t.y = victim.y + Math.sin(a) * 46;
+        t.stunT = Math.max(t.stunT, 2.4);
+        const d = Math.min(maxHp(victim) * 1.3, t.eliteTier === 2 ? 260 : 180);
+        applyDamage(t, d, victim, { quiet: true });
+        healed += d * .08;
+      }
+      victim.hp = Math.min(maxHp(victim), victim.hp + healed);
+      addFloat(victim.x, victim.y - 38, '诈尸交接班！', '#ff9440', 10, 1.4);
+      addShake(6); SFX.boss();
+    } else if (victim.isPlayer || nearPlayer(victim.x, victim.y)) SFX.fuse();
+    return;
+  }
   if (victim.mods.revive > 0) {
+    /* 摸鱼申诉信的"装忙减半档"（revive=.5）之前与满档无差别：现在复活回血减半 */
+    victim.hp = maxHp(victim) * (victim.mods.revive >= 1 ? .5 : .25);
     victim.mods.revive = 0;
-    victim.hp = maxHp(victim) * .5;
     victim.invulnT = 1.2;
     for (const p of G.projs) if (dist2(p.x, p.y, victim.x, victim.y) < 90 * 90) p.dead = true;
     addFloat(victim.x, victim.y - 20, victim.isBoss ? '“我给自己批了 N+1！”' : 'N+1到账，原地复活！', '#ffcf33', 8, 1.4);
@@ -1365,7 +1616,8 @@ function killUnit(victim, killer, cause, opts = {}) {
   /* 已发送-撤回中：死亡50%概率原地"撤回"复活一次，不可再次触发，纯节奏/心理设计怪 */
   if (victim.isMob) {
     const mm = MOBS[victim.mobType];
-    if (mm.recallChance && !victim.recalled && Math.random() < mm.recallChance) {
+    /* 需求冻结期间（noRecallT）撤回复活被冻结——该字段之前无任何消费者 */
+    if (mm.recallChance && !victim.recalled && !(victim.noRecallT > 0) && Math.random() < mm.recallChance) {
       victim.recalled = true;
       victim.hp = maxHp(victim);
       if (nearPlayer(victim.x, victim.y)) addFloat(victim.x, victim.y - 14, '消息撤回中…', '#6aa3ff', 7, .9);
@@ -1374,8 +1626,12 @@ function killUnit(victim, killer, cause, opts = {}) {
   }
   victim.alive = false;
   victim.hp = 0;
+  /* 试用期波次进度：任何死因（含无凶手的到期/环境死/策反后阵亡）都要计数——
+   * 原来计数在"有凶手"分支里，无凶手死亡会让波次永远差几只推不动 */
+  if (victim.isMob && G.trial.active && victim.trialSubWave === G.trial.subWave) G.trial.subWaveKilled++;
+  if (victim.isMob && victim.mobGroup) victim.mobGroup.alive--;   // 组计数同理：与死因/凶手无关
   addParts(victim.x, victim.y, victim.isBoss ? '#b665ff' : victim.shirt, victim.isBoss ? 40 : victim.isMob ? 7 : 16, 110, .7);
-  if (!victim.isMob) {
+  if (!victim.isMob && !victim.isSummon) {   // 召唤物到期不播死亡演出，OPC 流不再几秒一次"已优化"刷屏
     addParts(victim.x, victim.y, '#f2efe6', 8, 70, .5);
     addFloat(victim.x, victim.y - 18, victim.isBoss ? '老板毕业了！' : '已优化', victim.isBoss ? '#b665ff' : '#ff6a6a', 8, 1);
     if (victim.isPlayer || (killer && killer.isPlayer) || nearPlayer(victim.x, victim.y)) SFX.death();
@@ -1390,23 +1646,47 @@ function killUnit(victim, killer, cause, opts = {}) {
       killer.pot = Math.max(0, (killer.pot || 0) - Math.floor(kpi * .3));
       addFloat(victim.x, victim.y - 26, `KPI +${kpi}`, '#ffcf33', 10, 1.4);
       addFeed(`✅ 抢到「${m.publicIncident}」：KPI +${kpi}，锅值 −${Math.floor(kpi * .3)}`, true);
+      /* KPI 攒满兑现——之前 kpi 只加不用，整个奖励闭环空转 */
+      if (killer.kpi >= 100) {
+        killer.kpi = 0;
+        gainXp(killer, 120);
+        killer.shield = Math.min(maxHp(killer), (killer.shield || 0) + 25);
+        killer.shieldT = Math.max(killer.shieldT || 0, 10);
+        addFloat(killer.x, killer.y - 34, '🏆 季度之星：+120经验 +25盾', '#ffcf33', 10, 1.6);
+        addFeed('KPI 攒满 100：当选季度之星，奖励已发放', true);
+      }
     }
   }
 
   /* 掉落 */
   if (victim.isMob) {
     const m = MOBS[victim.mobType];
-    /* 需求变更单：打死分裂成两张小的；抄送轰炸：35%概率分裂出1只"已读不回"（splitChance/splitCount/splitInto 可选覆盖） */
-    if (m.split && !victim.isSplitChild && Math.random() < (m.splitChance ?? 1)) {
+    /* 需求变更单：打死分裂成两张小的；抄送轰炸：35%概率分裂出1只"已读不回"（splitChance/splitCount/splitInto 可选覆盖）
+     * 需求冻结期间（noSplitT）分裂被冻结——该字段之前无任何消费者 */
+    if (m.split && !victim.isSplitChild && !(victim.noSplitT > 0) && Math.random() < (m.splitChance ?? 1)) {
       const childType = m.splitInto || victim.mobType;
       for (let i = 0; i < (m.splitCount ?? 2); i++) spawnMob(childType, victim.x + rand(-10, 10), victim.y + rand(-10, 10), true, victim.mobMonth || 1);
       if (nearPlayer(victim.x, victim.y))
         addFloat(victim.x, victim.y - 14, childType === victim.mobType ? '需求又变了！' : '转发出去了！', '#7ac8ff', 6, .8);
     }
     if (Math.random() < .15) spawnXp(G, victim.x, victim.y, 2);
+    /* 工资小偷：吐出偷走的全部经验 ×1.5（打死它就是赚的） */
+    if (victim.stolenXp) {
+      spawnXp(G, victim.x, victim.y, Math.round(victim.stolenXp * 1.5) + 2);
+      if (nearPlayer(victim.x, victim.y)) addFloat(victim.x, victim.y - 16, '赃款追回！', '#ffcf33', 8, 1);
+    }
     /* 地板咖啡豆：环境刮痧的对冲回复（割草游戏的地板鸡定律） */
     if (Math.random() < .12) G.pickups.push({ type: 'heal', amt: 4, x: victim.x, y: victim.y, bob: rand(0, 6) });
   } else if (victim.isElite) {
+    /* 精英词条死亡效果：抄送/红点——之前是全工程无消费的空壳标记 */
+    if (victim._ccOnDeath) {
+      for (let i = 0; i < 2; i++) spawnMob('read_reply', victim.x + rand(-14, 14), victim.y + rand(-14, 14), false, 2);
+      addFloat(victim.x, victim.y - 22, '死前抄送了全员', '#9ad1ff', 8, 1);
+    }
+    if (victim._redDotSpawn) {
+      for (let i = 0; i < 3; i++) spawnMob('email', victim.x + rand(-16, 16), victim.y + rand(-16, 16), false, 2);
+      addFloat(victim.x, victim.y - 30, '红点未读 ×3', '#ff4f4f', 8, 1);
+    }
     spawnTech(G, pickTechId(), victim.x, victim.y, rollTier(victim.eliteTier === 2));
     spawnXp(G, victim.x, victim.y, victim.eliteTier === 2 ? 20 : 10);
     if (victim.eliteTier === 2) {   // 小 Boss 掉双倍模组（品级上偏）+ 消耗品
@@ -1437,22 +1717,54 @@ function killUnit(victim, killer, cause, opts = {}) {
     gainXp(killer, victim.isMob ? (victim.mobXp || MOBS[victim.mobType].xp)
       : (TUNE.xpPerKill + victim.level * 3) * (victim.isBoss ? 4 : 1) + (victim.isElite ? 15 : 0));
     if (killer.mods.killHeal) killer.hp = Math.min(maxHp(killer), killer.hp + killer.mods.killHeal * (victim.isMob ? .3 : 1));
+    if (killer.isPlayer && killer.wageDebt > 0) {
+      const cut = victim.isMob ? 10 : 24;
+      killer.wageDebt = Math.max(0, killer.wageDebt - cut);
+      if (killer.wageDebt <= 0) addFloat(killer.x, killer.y - 26, '欠薪已抵消', '#7ee08a', 8, .9);
+    }
+    if (killer.isPlayer && killer.mods.headhunter && !victim.isSummon) {
+      killer.opcKillMarks = (killer.opcKillMarks || 0) + (victim.isElite || victim.isBoss ? 3 : 1);
+      if (killer.opcKillMarks >= 10) {
+        killer.opcKillMarks = 0;
+        const hire = opcSummons(killer).filter(s => !s.opcSenior).sort((a, b) => maxHp(b) - maxHp(a))[0];
+        if (hire) {
+          hire.opcSenior = true;
+          hire.hpBase = Math.round(hire.hpBase * 1.55); hire.hp = Math.min(maxHp(hire), hire.hp + 24);
+          hire.mods.dmg *= 1.45; hire.opcDmgMul *= 1.25; hire.allyUntil += 10;
+          addFloat(hire.x, hire.y - 20, '资深员工转正', '#ffcf33', 8, 1);
+        }
+      }
+    }
+    const rlhfExecuted = killer.isPlayer && (opts.executed || cause === 'execute');
+    if (rlhfExecuted) {
+      if (killer.mods.executeBlastChance && Math.random() < killer.mods.executeBlastChance)
+        explodeAtNoRecurse(victim.x, victim.y, 72, Math.min(maxHp(victim) * .22 + wpnDmg(killer), 140), killer, '#ff9440');
+      if (killer.mods.executionNuke) {
+        killer.executeCounter = (killer.executeCounter || 0) + 1;
+        const nukeNeed = killer.mods.executionNukeEvery || 12;
+        if (killer.executeCounter >= nukeNeed) {
+          killer.executeCounter = 0;
+          explodeAtNoRecurse(victim.x, victim.y, 185, Math.min(200 + wpnDmg(killer) * 2, 260), killer, '#ff4f4f');
+          addFloat(killer.x, killer.y - 28, '核按钮授权：全量优化', '#ff4f4f', 10, 1.4);
+          SFX.boss(); addShake(6);
+        } else if (killer.executeCounter % 3 === 0) {
+          addFloat(killer.x, killer.y - 24, `处决样本 ${killer.executeCounter}/${nukeNeed}`, '#ff9440', 8, .9);
+        }
+      }
+    }
     /* 全员大会核爆：控制效果间接/直接导致的击杀累积会议积分 */
     if (killer.mods.assemblyNuke && (victim.stunT > 0 || victim.curses.repeat > 0)) killer.meetingPoints = (killer.meetingPoints || 0) + 1;
-    /* 临时工外包大军：全组最后1只死亡才一次性结算奖励经验（拖到最后一击才爆发） */
-    if (victim.isMob && victim.mobGroup) {
-      victim.mobGroup.alive--;
-      if (victim.mobGroup.alive <= 0) {
-        const bonus = MOBS[victim.mobType].groupBonusXp || 0;
-        gainXp(killer, bonus);
-        if (nearPlayer(victim.x, victim.y)) addFloat(victim.x, victim.y - 20, `外包大军清空 +${bonus}经验`, '#ffcf33', 8, 1);
-      }
+    /* 临时工外包大军：全组最后1只死亡才一次性结算奖励经验（拖到最后一击才爆发）
+     * 计数递减在下方通用段（无凶手死亡也要递减），这里只发放奖励 */
+    if (victim.isMob && victim.mobGroup && victim.mobGroup.alive <= 0) {
+      const bonus = MOBS[victim.mobType].groupBonusXp || 0;
+      gainXp(killer, bonus);
+      if (nearPlayer(victim.x, victim.y)) addFloat(victim.x, victim.y - 20, `外包大军清空 +${bonus}经验`, '#ffcf33', 8, 1);
     }
     /* v18: onKill proc 触发（杂鱼击杀也算，让"每击杀触发"类效果在割草时也生效） */
     if (!opts.fromProc && killer.mods && killer.mods.procs) fireProcs(killer, 'onKill', { victim });
     if (victim.isMob) {
-      /* 试用期波次进度：只对当前波次的敌人计数（前波漏网/延迟死亡不算） */
-      if (G.trial.active && victim.trialSubWave === G.trial.subWave) G.trial.subWaveKilled++;
+      /* 波次计数已上移到死亡通用段（任何死因都算），这里只留击杀音效 */
       if (killer.isPlayer) SFX.hit();
       return;   // 杂鱼不进击杀数/连杀/播报
     }
@@ -1475,7 +1787,8 @@ function killUnit(victim, killer, cause, opts = {}) {
 
   /* 击杀播报 */
   if (victim.isSummon) {
-    addFeed(`你的 ${victim.name} 报废了`, true);
+    /* 自然到期（inject/寿命）不播报；只有被敌人打死才低调提一句——原来每次到期都高亮刷屏 */
+    if (cause !== 'inject' && killer) addFeed(`你的 ${victim.name} 阵亡了`, false);
   } else if (!victim.isHR && !victim.isElite && !victim.isMob) {
     if (cause === 'zone') addFeed(`${victim.name} 被裁员红线优化了`, victim.isPlayer);
     else if (cause === 'burn') addFeed(`${victim.name} 倒在了画的饼里`, victim.isPlayer);
@@ -1524,11 +1837,19 @@ export function gainXp(u, amt) {
     u.level++;
     if (u.mods.levelHp) { u.hpBase += u.mods.levelHp; u.hp = Math.min(maxHp(u), u.hp + u.mods.levelHp); }
     if (u.isPlayer) {
+      const heal = TUNE.levelHeal || 0;
+      const shield = TUNE.levelShield || 0;
+      if (heal) u.hp = Math.min(maxHp(u), u.hp + heal);
+      if (shield) {
+        u.shield = Math.max(u.shield || 0, shield);
+        u.shieldT = Math.max(u.shieldT || 0, TUNE.levelShieldT || 5);
+      }
       G.pendingLevels++;
       SFX.levelup();
-      addFloat(u.x, u.y - 20, '升职了！', '#ffcf33', 9, 1);
+      addFloat(u.x, u.y - 20, `升职了！+${heal} HP +${shield} 盾`, '#ffcf33', 9, 1);
     } else {
-      const pool = SKILLS.filter(s => (u.skills[s.id] || 0) < s.max && (!s.valid || s.valid(u)));
+      /* 机器人不抽人设专属卡：这些卡的消费点全在玩家专属路径里，抽到即废（白白浪费成长） */
+      const pool = SKILLS.filter(s => !s.persona && (u.skills[s.id] || 0) < s.max && (!s.valid || s.valid(u)));
       if (pool.length) applySkill(u, pick(pool));
       u.hp = Math.min(maxHp(u), u.hp + 15);
     }
@@ -1546,6 +1867,19 @@ export function applySkill(u, s) {
 function useItem(u, id) {
   const boost = u.mods.itemBoost;
   const F = n => Math.round(n * boost);
+  const healWithOverflowShield = (rawHeal, shieldRate = .5) => {
+    const mh = maxHp(u);
+    const before = u.hp;
+    const heal = Math.max(0, Math.round(rawHeal));
+    u.hp = Math.min(mh, u.hp + heal);
+    const gained = u.hp - before;
+    const overflow = Math.max(0, heal - gained);
+    if (overflow > 0) {
+      u.shield = Math.min(mh, (u.shield || 0) + Math.round(overflow * shieldRate));
+      u.shieldT = Math.max(u.shieldT || 0, 10);
+    }
+    return { gained: Math.round(gained), shield: overflow > 0 ? Math.round(overflow * shieldRate) : 0 };
+  };
   switch (id) {
     case 'iced_americano':
       u.hp = Math.min(maxHp(u), u.hp + F(30));
@@ -1560,7 +1894,7 @@ function useItem(u, id) {
       if (u.isPlayer) addFloat(u.x, u.y - 16, `+${F(50)} 经验`, '#ffe27a', 8, .8);
       break;
     case 'n1_package':
-      u.shield = F(30); u.shieldT = 10;
+      u.shield = Math.max(u.shield || 0, F(30)); u.shieldT = Math.max(u.shieldT || 0, 10);   // 不再把更高的现有护盾覆盖降级
       if (u.isPlayer) addFloat(u.x, u.y - 16, `+${F(30)} 护盾`, '#6aa3ff', 8, .8);
       break;
     case 'teambuild_milktea':
@@ -1579,6 +1913,7 @@ function useItem(u, id) {
       break;
     case 'reset_card': {
       u.weapon.cd = 0; u.dashT = 0; u.activeCd = 0;
+      u.activeQCd = 0; u.activeECd = 0;
       u.weapon.droneCds = [0, 0, 0, 0]; u.ragCds = [0, 0];
       u.weapon.pillarT = 0;
       if (u.dstT) for (const k in u.dstT) u.dstT[k] = 0;
@@ -1587,7 +1922,7 @@ function useItem(u, id) {
       break;
     }
     case 'n2_package':
-      u.shield = F(60); u.shieldT = 12;
+      u.shield = Math.max(u.shield || 0, F(60)); u.shieldT = Math.max(u.shieldT || 0, 12);   // 同上：取高不覆盖
       u.hp = Math.min(maxHp(u), u.hp + F(20));
       if (u.isPlayer) addFloat(u.x, u.y - 16, `2N 到账：+${F(60)} 盾 +${F(20)} HP`, '#c9a227', 9, 1);
       break;
@@ -1596,6 +1931,48 @@ function useItem(u, id) {
         G.rerollCredits = (G.rerollCredits || 0) + 1;
         addFloat(u.x, u.y - 16, `简历已刷新（重抽机会 ×${G.rerollCredits}）`, '#7ac8ff', 8, 1);
       }
+      break;
+    case 'workers_comp': {
+      const missing = maxHp(u) - u.hp;
+      const heal = Math.min(F(80), Math.max(F(25), Math.round(missing * .55 * boost)));
+      const got = healWithOverflowShield(heal, .6);
+      if (u.isPlayer) addFloat(u.x, u.y - 16, `工伤报销 +${got.gained} HP${got.shield ? ` +${got.shield}盾` : ''}`, '#7ee08a', 8, 1);
+      break;
+    }
+    case 'sick_leave_note': {
+      const got = healWithOverflowShield(F(22), .5);
+      u.invulnT = Math.max(u.invulnT || 0, 1.8 * boost);
+      if (u.isPlayer) addFloat(u.x, u.y - 16, `病假批准 +${got.gained} HP · 短暂无敌`, '#6aa3ff', 8, 1);
+      break;
+    }
+    case 'noise_cancel_headset':
+      for (const k in u.curses) u.curses[k] = 0;
+      u.reportedT = 0;
+      u.oaSlowT = 0;
+      u.stunT = 0;
+      u.vulnT = 0;
+      u.buffs.spdT = Math.max(u.buffs.spdT, 4 * boost);
+      u.buffs.spdM = Math.max(u.buffs.spdM, 1.25);
+      if (u.isPlayer) addFloat(u.x, u.y - 16, '降噪成功：清负面 + 提速', '#7ac8ff', 8, 1);
+      break;
+    case 'power_bank': {
+      const cut = F(8);
+      u.weapon.cd = 0;
+      u.dashT = Math.max(0, (u.dashT || 0) - F(3));
+      u.activeCd = Math.max(0, (u.activeCd || 0) - cut);
+      u.activeQCd = Math.max(0, (u.activeQCd || 0) - cut);
+      u.activeECd = Math.max(0, (u.activeECd || 0) - cut);
+      for (const sid in u.subs) u.subs[sid].t = Math.max(0, (u.subs[sid].t || 0) - F(3));
+      if (u.isPlayer) addFloat(u.x, u.y - 16, `充电完成：冷却 -${cut}s`, '#ffcf33', 8, 1);
+      break;
+    }
+    case 'admin_supply_bag':
+      if (G) {
+        const a = rand(0, Math.PI * 2), b = a + Math.PI * .75;
+        spawnItem(G, pick(SURVIVAL_ITEM_IDS), u.x + Math.cos(a) * 16, u.y + Math.sin(a) * 16);
+        G.pickups.push({ type: 'heal', amt: F(22), x: u.x + Math.cos(b) * 16, y: u.y + Math.sin(b) * 16, bob: rand(0, 6) });
+      }
+      if (u.isPlayer) addFloat(u.x, u.y - 16, '行政补给已拆封', '#ff9edb', 8, 1);
       break;
   }
   if (u.isPlayer) SFX.pickup();
@@ -1643,18 +2020,53 @@ function updatePersonaSkills(u, dt) {
   u.fuseBreakCd -= dt;
 
   if (!u.isPlayer) return;
+  u.opcFocusT = Math.max(0, (u.opcFocusT || 0) - dt);
+  u.severanceCd = Math.max(0, (u.severanceCd || 0) - dt);
+  u.opcMatrixT = Math.max(0, (u.opcMatrixT || 0) - dt);
+  if (u.mods.contractorSummon > 0) {
+    const mine = opcSummons(u);
+    const cap = Math.min(OPC_SUMMON_CAP, 1 + u.mods.contractorSummon);
+    u.opcSummonT -= dt;
+    if (u.opcSummonT <= 0 && mine.length < cap) {
+      u.opcSummonT = Math.max(2.2, 6.4 * (u.mods.summonCdMul || 1));
+      spawnOpcSummon(u, 'contractor');
+    }
+    if (u.mods.summonCdMul < 1 && mine.length) {
+      u.buffs.spdT = Math.max(u.buffs.spdT, .35);
+      u.buffs.spdM = Math.max(u.buffs.spdM, 1 + Math.min(.18, (1 - u.mods.summonCdMul) * .8));
+    }
+  }
+  const activeOpc = opcSummons(u);
+  if (u.mods.contractorMatrix && activeOpc.length >= 6) {
+    u.opcMatrixT = Math.max(u.opcMatrixT, .35);
+    u.buffs.dmgT = Math.max(u.buffs.dmgT, .35);
+    u.buffs.dmgM = Math.max(u.buffs.dmgM, 1.12);
+    const focus = u.opcFocusTarget && u.opcFocusTarget.alive ? u.opcFocusTarget
+      : nearestUnit(u.x, u.y, 260, t => isFoe(u, t));
+    if (focus) {
+      focus.vulnT = Math.max(focus.vulnT || 0, .5);
+      focus.vulnBonus = Math.max(focus.vulnBonus || 0, .15);
+      u.opcFocusTarget = focus; u.opcFocusT = Math.max(u.opcFocusT, .4);
+    }
+  }
+  if (u.mods.severanceNuke && u.severanceCd <= 0 && (u.severancePoints || 0) >= 15) {
+    triggerSeveranceNuke(u, u.x, u.y, 1);
+  }
   /* 假装忙碌：闲置超1.5秒触发短暂提速，逼玩家别停 */
   if (u.mods.fakeBusy && u.idleT > 1.5) {
     u.idleT = 0;
     u.buffs.spdT = Math.max(u.buffs.spdT, 1);
     u.buffs.spdM = Math.max(u.buffs.spdM, 1.2);
   }
-  /* 在线时长认证：连续不被命中每5秒叠一层"活跃认证"，被命中清零（noHitT 在 applyDamage 里清零） */
+  /* 在线时长认证：连续不被命中每5秒叠一层"活跃认证"，被命中清零（noHitT 在 applyDamage 里清零）
+   * 假勤奋真怠工改用独立计时 fdIdleT——原来两技能共用 noHitT，假勤奋每 8s 清零一次，认证永远卡在 1 层 */
   u.noHitT += dt;
+  u.fdIdleT = (u.fdIdleT || 0) + dt;
   if (u.mods.uptimeCertRate) {
     const layers = Math.min(5, Math.floor(u.noHitT / 5));
     if (layers > 0) {
-      u.buffs.dmgT = .3; u.buffs.dmgM = 1 + layers * .02 * u.mods.uptimeCertRate;
+      u.buffs.dmgT = Math.max(u.buffs.dmgT, .3);
+      u.buffs.dmgM = Math.max(u.buffs.dmgM, 1 + layers * .02 * u.mods.uptimeCertRate);
       u.buffs.fireT = Math.max(u.buffs.fireT, .3); u.buffs.fireM = Math.max(u.buffs.fireM, 1 + layers * .03 * u.mods.uptimeCertRate);
     }
   }
@@ -1665,8 +2077,64 @@ function updatePersonaSkills(u, dt) {
    *  - 5 只怪: min(3, 1.6) = wpnDmg*1.6（总 8 倍）
    *  - 15 只怪: min(3, 0.53) = wpnDmg*0.53（总 8 倍，不再线性膨胀）*/
   u.ignoreDmgT -= dt;
-  if (u.mods.fakeDiligence && u.noHitT >= (u.mods.__evoFakeDiligenceUpgrade ? 5 : 8)) {
-    u.noHitT = 0;
+  if (u.hardinessT > 0) {
+    u.hardinessT -= dt;
+    const layers = Math.min(10, u.hardinessLayers || 0);
+    if (layers > 0) {
+      u.buffs.dmgT = Math.max(u.buffs.dmgT, .25);
+      u.buffs.dmgM = Math.max(u.buffs.dmgM, 1 + layers * .025);
+    }
+    if (u.hardinessT <= 0) u.hardinessLayers = 0;
+  }
+  if (u.bloodVanT > 0) {
+    u.bloodVanT -= dt;
+    u.hp = Math.min(maxHp(u), u.hp + (u.bloodVanHeal || 6) * dt);
+    u.vulnT = Math.max(u.vulnT || 0, .2);
+    u.vulnBonus = Math.max(u.vulnBonus || 0, u.bloodVanVuln || .12);
+    if (u.bloodVanT <= 0) addFloat(u.x, u.y - 20, '献血车收摊', '#9aa4b5', 7, .8);
+  }
+  if (u.noClockoutT > 0) {
+    u.noClockoutT -= dt;
+    if (u.noClockoutT <= 0 && u.wageDebt > 0) {
+      const debt = u.wageDebt;
+      u.wageDebt = 0;
+      addFloat(u.x, u.y - 24, `欠薪结算 -${Math.round(debt)}`, '#ff6a6a', 8, 1);
+      applyDamage(u, debt, null, { cause: 'wage_debt', quiet: false });
+    }
+  }
+  if (u.mods.backwater) {
+    const low = u.hp < maxHp(u) * .3;
+    if (low) {
+      u.backwaterActive = true;
+      u.buffs.dmgT = Math.max(u.buffs.dmgT, .3); u.buffs.dmgM = Math.max(u.buffs.dmgM, 1.35);
+      u.buffs.fireT = Math.max(u.buffs.fireT, .3); u.buffs.fireM = Math.max(u.buffs.fireM, 1.2);
+    } else if ((u.backwaterActive || (u.bloodDebtDamage || 0) > 0) && u.hp >= maxHp(u) * .45) {
+      u.backwaterActive = false;
+      const scale = u.mods.__evoFubaoField ? .55 : .32;
+      const dmg = Math.min((u.bloodDebtDamage || 0) * scale, maxHp(u) * (u.mods.__evoFubaoField ? 2.2 : 1.4));
+      u.bloodDebtDamage = 0;
+      if (dmg > 8) {
+        explodeAtNoRecurse(u.x, u.y, u.mods.__evoFubaoField ? 155 : 120, dmg, u, '#ff9440');
+        addFloat(u.x, u.y - 26, '血债清算', '#ff9440', 10, 1.2);
+      }
+    }
+  }
+  u.overworkCd = Math.max(0, (u.overworkCd || 0) - dt);
+  if (u.mods.overworkNuke && u.overworkCd <= 0 && (u.overworkDamage || 0) >= maxHp(u) * 2.4) {
+    u.overworkDamage = 0;
+    u.overworkCd = 20;
+    u.invulnT = Math.max(u.invulnT, .6);
+    u.hp = Math.min(maxHp(u), u.hp + maxHp(u) * .45);
+    const dmg = Math.min(maxHp(u) * 1.25, 260);
+    for (const t of G.units) if (isFoe(u, t) && dist2(u.x, u.y, t.x, t.y) < 170 * 170) {
+      applyDamage(t, t.isBoss || t.eliteTier === 2 ? Math.min(dmg, 180) : dmg, u, { quiet: false });
+      t.vulnT = Math.max(t.vulnT || 0, 5); t.vulnBonus = Math.max(t.vulnBonus || 0, .2);
+    }
+    addFloat(u.x, u.y - 28, '996核爆协议！', '#ff6a6a', 11, 1.4);
+    addShake(6); SFX.boss();
+  }
+  if (u.mods.fakeDiligence && u.fdIdleT >= (u.mods.__evoFakeDiligenceUpgrade ? 5 : 8)) {
+    u.fdIdleT = 0;
     const foes = G.units.filter(t => isFoe(u, t) && dist2(u.x, u.y, t.x, t.y) < 260 * 260);
     if (foes.length > 0) {
       const totalBurst = wpnDmg(u) * 8;
@@ -1712,6 +2180,9 @@ function updatePersonaSkills(u, dt) {
          * 破局分析：旧版无差别 maxHp*2 让每 8s 白嫖秒杀 T2 小 Boss（约 500-800 血 → 一发 1000-1600 直接死）*/
         const cap = t.isBoss ? 150 : t.eliteTier === 2 ? 400 : t.isElite ? 250 : 250;
         explodeAt(t.x, t.y, 110, Math.min(maxHp(t) * 2, cap), u, '#ff6a6a');
+        /* 觉醒承诺"沿链殉爆"：连坐搭档吃 60% 爆炸伤害（原来完全未实现） */
+        if (u.mods.__evoDismissalChain && t.linkedTo && t.linkedTo.alive)
+          applyDamage(t.linkedTo, Math.min(maxHp(t.linkedTo), cap) * .6, u, { quiet: false });
       }
     }
   }
@@ -1749,9 +2220,12 @@ function updatePersonaSkills(u, dt) {
         u.slackTickT = .2;
         for (const t of G.units) if (isFoe(u, t) && dist2(u.x, u.y, t.x, t.y) < 50 * 50) {
           applyDamage(t, wpnDmg(u) * .6, u, { quiet: true });
-          if (u.mods.__evoOnlineOffline) {   // 觉醒：在线但心已离职——命中叠永久攻击力，上限15层
-            u.__slackStacks = Math.min(15, (u.__slackStacks || 0) + 1);
-            u.mods.dmg = (u.__slackStacksBase || (u.__slackStacksBase = u.mods.dmg)) * (1 + u.__slackStacks * .01);
+          if (u.mods.__evoOnlineOffline && (u.__slackStacks || 0) < 15) {
+            /* 觉醒：在线但心已离职——命中叠永久攻击力，上限15层。
+             * 原实现用首次快照整体覆写 mods.dmg，会回滚之后拿到的一切增伤（越玩越弱）；
+             * 改为每获得一层只乘一次 1%，与其它伤害来源正常叠乘 */
+            u.__slackStacks = (u.__slackStacks || 0) + 1;
+            u.mods.dmg *= 1.01;
           }
         }
       }
@@ -1761,7 +2235,12 @@ function updatePersonaSkills(u, dt) {
       u.slackCd = 10;   // 硬冷却：触发后 10 秒内即使再攒够 800px 也不能再触发
       u.buffs.spdT = Math.max(u.buffs.spdT, 2); u.buffs.spdM = Math.max(u.buffs.spdM, 3);
       addFloat(u.x, u.y - 20, '高铁摸鱼！', '#ffcf33', 9, 1.2); SFX.dash();
-      if (u.mods.__evoOnlineOffline) u.invulnT = Math.max(u.invulnT, .3);
+      /* 觉醒描述承诺"附带完整临时下线效果"——原来只有 0.3s 无敌，现在补齐隐身+双倍移速 1 秒 */
+      if (u.mods.__evoOnlineOffline) {
+        u.invulnT = Math.max(u.invulnT, 1);
+        u.hiddenT = Math.max(u.hiddenT || 0, 1);
+        u.buffs.spdM = Math.max(u.buffs.spdM, 2);
+      }
     }
   }
 }
@@ -1830,18 +2309,54 @@ function updateDistills(u, dt) {
   }
 }
 function doInject(u, dur = 20) {
+  const owner = u.allyOwner || u;
+  /* 1) 优先策反同事（原有逻辑）：白嫖一个持枪打手 */
   const t = nearestUnit(u.x, u.y, 320, o => isFoe(u, o) && o.bot && !o.isHR && !o.isElite && !o.allyOwner);
-  if (!t) {
-    gainXp(u, 25);
-    if (u.isPlayer) addFloat(u.x, u.y - 16, '附近没人可策反 +25经验', '#9aa4b5', 7, .8);
+  if (t) {
+    t.allyOwner = owner; t.allyUntil = G.t + dur;
+    t.bot.target = null; t.bot.decideT = 0;
+    t.bot.provokedT = 0; t.lastAtk = null;
+    addFloat(t.x, t.y - 20, '已被注入：开始帮忙打工', '#ff6a8a', 7, 1.4);
+    if (u.isPlayer || nearPlayer(u.x, u.y)) { addFeed(`${u.name} 策反了 ${t.name}（${Math.round(dur)}秒）`, u.isPlayer); SFX.fuse(); }
     return;
   }
-  const owner = u.allyOwner || u;
-  t.allyOwner = owner; t.allyUntil = G.t + dur;
-  t.bot.target = null; t.bot.decideT = 0;
-  t.bot.provokedT = 0; t.lastAtk = null;
-  addFloat(t.x, t.y - 20, '已被注入：开始帮忙打工', '#ff6a8a', 7, 1.4);
-  if (u.isPlayer || nearPlayer(u.x, u.y)) { addFeed(`${u.name} 策反了 ${t.name}（20秒）`, u.isPlayer); SFX.fuse(); }
+  /* 2) 没有同事在场 → 对老板/月度考核官注入：污染系统提示词（眩晕+易伤+减速）
+   *    之前对 Boss 完全无效，这张卡在 Boss 战里是废纸 */
+  const big = nearestUnit(u.x, u.y, 340, o => isFoe(u, o) && (o.isBoss || o.eliteTier === 2));
+  if (big) {
+    big.stunT = Math.max(big.stunT, 1.5);
+    big.oaSlowT = Math.max(big.oaSlowT, 4);
+    big.vulnT = Math.max(big.vulnT || 0, 3 + dur * .15);           // 模组档位 12/20/30 → 4.8/6/7.5 秒易伤
+    big.vulnBonus = Math.max(big.vulnBonus || 0, .3);
+    addFloat(big.x, big.y - 26, '⚠ 系统提示词已被污染', '#ff6a8a', 9, 1.5);
+    if (u.isPlayer || nearPlayer(u.x, u.y)) { addFeed(`${u.name} 往 ${big.name} 的系统提示词里塞了脏数据`, u.isPlayer); SFX.fuse(); }
+    return;
+  }
+  /* 3) 试用期/只剩杂鱼 → 策反最近几只小兵倒戈成临时打手（借用 OPC 召唤物近战 AI）
+   *    之前试用期捡到这张卡毫无价值 */
+  const mobs = G.units.filter(o => o.alive && o.isMob && !o.isSummon && !MOBS[o.mobType].publicIncident
+    && o.spdBase > 0 && dist2(u.x, u.y, o.x, o.y) < 320 * 320)
+    .sort((a, b) => dist2(u.x, u.y, a.x, a.y) - dist2(u.x, u.y, b.x, b.y))
+    .slice(0, 2 + Math.round(dur / 12));   // 档位 12/20/30 → 3/4/5 只
+  if (mobs.length) {
+    for (const mb of mobs) {
+      /* 策反视同"处理掉"：计入波次进度，且脱离杂鱼计数，避免波次卡死 */
+      if (G.trial.active && mb.trialSubWave === G.trial.subWave) G.trial.subWaveKilled++;
+      if (mb.mobGroup) { mb.mobGroup.alive--; mb.mobGroup = null; }
+      mb.trialSubWave = null;
+      mb.isMob = false; mb.isSummon = true; mb.opcSummon = true; mb.injectConvert = true;
+      mb.summonType = 'opc_wall';
+      mb.allyOwner = owner; mb.allyUntil = G.t + dur * .75;
+      mb.opcShotCd = .85; mb.sumT = rand(.1, .4);
+      mb.hp = Math.min(maxHp(mb), mb.hp + 10);
+      mb.shirt = '#ff6a8a';
+      addFloat(mb.x, mb.y - 14, '已被注入', '#ff6a8a', 6, .9);
+    }
+    if (u.isPlayer) { addFeed(`提示注入生效：${mobs.length} 只琐事倒戈帮你打工`, true); SFX.fuse(); }
+    return;
+  }
+  gainXp(u, 25);
+  if (u.isPlayer) addFloat(u.x, u.y - 16, '附近没有可注入对象 +25经验', '#9aa4b5', 7, .8);
 }
 function doClear(u, radius = 95, dmg = 30) {
   let n = 0;
@@ -1888,6 +2403,14 @@ export function update(dt) {
   if (G.freezeT > 0) { G.freezeT -= dt; dt *= .15; }   // 击杀顿帧
   G.t += dt;
   BGM.refreshPlayingTrack(G);   // 试用期/正式大逃杀/老板战之间的 BGM 切轨，幂等，开销可忽略
+  /* 游戏内延迟任务结算（暂停/升级期间自然冻结，回调里再排新任务也安全） */
+  if (G.delayed && G.delayed.length) {
+    const due = G.delayed.filter(d => G.t >= d.at);
+    if (due.length) {
+      G.delayed = G.delayed.filter(d => G.t < d.at);
+      for (const d of due) d.fn();
+    }
+  }
 
   /* ---------- 试用期波次调度（击杀驱动，非时间驱动） ----------
    *   每月 3 波固定敌人 + 月度考核 Boss
@@ -1938,7 +2461,8 @@ export function update(dt) {
     if (tr.subWavePool.length > 0 && G.player.alive) {
       tr.subWaveSpawnT -= dt;
       if (tr.subWaveSpawnT <= 0) {
-        tr.subWaveSpawnT = .3;
+        /* 第 1 月倾倒放缓（0.3→0.5s/团）：开局 DPS 低，5只/0.3s 的倾泻会在第一波直接淹死新手 */
+        tr.subWaveSpawnT = tr.wave <= 1 ? .5 : .3;
         const packA = rand(0, Math.PI * 2), packR = rand(300, 400);
         const packX = clamp(G.player.x + Math.cos(packA) * packR, 30, TUNE.world - 30);
         const packY = clamp(G.player.y + Math.sin(packA) * packR, 30, TUNE.world - 30);
@@ -1960,7 +2484,13 @@ export function update(dt) {
     if (tr.subWave > 0 && !tr.bossThisWave && !tr.monthDone
         && tr.subWavePool.length === 0 && tr.subWaveKilled >= tr.subWaveTarget) {
       if (tr.subWave < 3) {
-        addFloat(G.player.x, G.player.y - 22, `✅ 第 ${tr.subWave} 波清完！`, '#7ee08a', 11, 1.4);
+        addFloat(G.player.x, G.player.y - 22, `✅ 第 ${tr.subWave} 波清完！+12 HP`, '#7ee08a', 11, 1.4);
+        /* 清波奖励：小回血+小护盾——给下一波留缓冲，试用期不再是无喘息的绞肉机 */
+        if (G.player.alive) {
+          G.player.hp = Math.min(maxHp(G.player), G.player.hp + 12);
+          G.player.shield = Math.max(G.player.shield || 0, 10);
+          G.player.shieldT = Math.max(G.player.shieldT || 0, 6);
+        }
         SFX.levelup();
         startTrialSubWave(tr.subWave + 1);
       } else if (tr.bossReadyT <= 0) {
@@ -2003,6 +2533,10 @@ export function update(dt) {
     /* 试用期彻底结束：最后一月 Boss 已死且过渡走完 */
     if (tr.wave >= tr.months && tr.monthDone && tr.waveT <= 0) {
       tr.active = false;
+      /* 记录试用期实际结束时刻：缩圈/Boss/同事仇恨的时间轴一律从这里起算。
+       * 原来用开局时按旧时间驱动公式预算的 trialOffset，实际时长普遍超预算，
+       * 转正瞬间会连补 1-2 个缩圈相位（圈突然狂缩），速通则要干等 */
+      G.trialEndT = G.t;
       spawnLateBots();
       warn('📢 试用期结束，全体同事到岗——正式开卷！');
       addFeed('HR：全员转正述职即日开始，祝各位好运', true);
@@ -2022,22 +2556,54 @@ export function update(dt) {
     }
   }
 
-  /* 补给刷新（决赛圈行政停止补货） */
-  if (G.zone.phase < 3) {
+  /* 补给刷新：芯片/模组在后期停止，正式大逃杀的消耗品和回血补给持续低频投放 */
+  const canRestockGear = G.zone.phase < 3;
+  const canRestockItems = G.zone.phase < 3 || !tr.active;
+  if (canRestockGear) {
     G.chipT -= dt;
     if (G.chipT <= 0) {
       G.chipT = 15;
       if (G.pickups.filter(p => p.type === 'chip').length < 14) spawnChip(G, pick(Object.keys(WEAPONS)), Math.random() < .25 ? 2 : 1);
     }
-    G.itemT -= dt;
-    if (G.itemT <= 0) {
-      G.itemT = 12;
-      if (G.pickups.filter(p => p.type === 'item').length < 12) spawnItem(G);
-    }
     G.techT -= dt;
     if (G.techT <= 0) {
       G.techT = 25;
       if (G.pickups.filter(p => p.type === 'tech').length < 8) spawnTech(G, pickTechId());
+    }
+  }
+  if (canRestockItems) {
+    G.itemT -= dt;
+    if (G.itemT <= 0) {
+      const finalCircle = G.zone.phase >= 3;
+      G.itemT = !tr.active ? (finalCircle ? TUNE.battleFinalItemInterval : TUNE.battleItemInterval) : 12;
+      const itemCap = !tr.active ? (finalCircle ? TUNE.battleFinalItemCap : TUNE.battleItemCap) : 12;
+      if (G.pickups.filter(p => !p.dead && p.type === 'item').length < itemCap) spawnItem(G);
+      if (!tr.active && Math.random() < TUNE.battleHealDropChance &&
+          G.pickups.filter(p => !p.dead && p.type === 'heal').length < (finalCircle ? 8 : 12)) {
+        const pos = randPosInZone(G, finalCircle ? .55 : .75);
+        G.pickups.push({ type: 'heal', amt: finalCircle ? 25 : 20, x: pos.x, y: pos.y, bob: rand(0, 6) });
+      }
+    }
+  }
+  /* v2.2 正赛"琐事骚扰潮"：转正后周期性小撮杂鱼（含新行为怪）从圈内一角涌来，
+   * 维持割草密度与怪物多样性——免试用期玩家也能见到全部怪物品类 */
+  if (!tr.active && G.player.alive) {
+    G.mobTrickleT = (G.mobTrickleT ?? 14) - dt;
+    if (G.mobTrickleT <= 0) {
+      G.mobTrickleT = G.zone.phase >= 3 ? 34 : 22;
+      const wild = G.units.filter(u => u.alive && u.isMob && !u.publicIncident).length;
+      const cap = G.zone.phase >= 3 ? 6 : 14;
+      if (wild < cap) {
+        const n = randi(3, 6), a0 = rand(0, Math.PI * 2);
+        const month = Math.min(5, 3 + G.zone.phase);
+        for (let i = 0; i < n; i++) {
+          const a = a0 + rand(-.6, .6), rr = rand(300, 400);
+          spawnMob(pick(BR_MOB_POOL),
+            clamp(G.player.x + Math.cos(a) * rr, 30, TUNE.world - 30),
+            clamp(G.player.y + Math.sin(a) * rr, 30, TUNE.world - 30), false, month);
+        }
+        addFeed('一批琐事找上门来', false);
+      }
     }
   }
   /* 精英野怪刷新（tier1 普通野怪；试用期由波次接管，不走常规刷新） */
@@ -2090,13 +2656,20 @@ export function update(dt) {
     }
   }
 
-  /* 尸体清扫：只清杂鱼尸体（试用期涓流是唯一无界尸体源，长局防内存/遍历膨胀） */
+  /* 尸体清扫：杂鱼 + 召唤物 + 精英（OPC 流每几秒产出一个短命召唤物，原来只清杂鱼，
+   * 长局累积数百死单位拖慢全量遍历）。同事尸体保留（结算/播报用） */
   G.corpseT = (G.corpseT ?? 2) - dt;
   if (G.corpseT <= 0) {
     G.corpseT = 2;
-    if (G.units.some(u => u.isMob && !u.alive)) G.units = G.units.filter(u => u.alive || !u.isMob);
+    if (G.units.some(u => !u.alive && (u.isMob || u.isSummon || u.isElite)))
+      G.units = G.units.filter(u => u.alive || !(u.isMob || u.isSummon || u.isElite));
   }
 
+  /* 喷淋倒计时不分阶段递减：原来放在"非试用期"块里，试用期打爆消防栓后全场减速直到转正才解除 */
+  if (G.sprinklerActiveT > 0) {
+    G.sprinklerActiveT -= dt;
+    if (G.sprinklerActiveT <= 0) G.sprinklerBoostedDps = 0;
+  }
   /* v2.0 Phase E · 5 种环境事件 tick（试用期不触发，避免玩家开局暴毙） */
   if (!tr.active && G.player.alive) {
     /* 1) 消防警报：8s 内所有单位 1dps + 20% 减速 */
@@ -2110,11 +2683,12 @@ export function update(dt) {
       markEventTriggered('sprinkler');
     }
     if (G.sprinklerActiveT > 0) {
-      G.sprinklerActiveT -= dt;
       const dps = G.sprinklerBoostedDps || 1;
       for (const u of G.units) {
         if (!u.alive) continue;
-        u.hp -= dt * dps;
+        /* 走 applyDamage 累计通道：原来直接 u.hp -= 会把单位打成负血不死的"僵尸"（唯一死亡入口在 applyDamage） */
+        u.sprinklerAcc = (u.sprinklerAcc || 0) + dt * dps;
+        if (u.sprinklerAcc >= 1) { const d = u.sprinklerAcc; u.sprinklerAcc = 0; applyDamage(u, d, null, { cause: 'zone', quiet: true }); }
       }
       /* v2.0 §8.20 喷淋视觉：视口范围内每帧撒 ~15 颗淡蓝水滴粒子（向下 gravity）*/
       if (G.player.alive) {
@@ -2129,7 +2703,6 @@ export function update(dt) {
           });
         }
       }
-      if (G.sprinklerActiveT <= 0) G.sprinklerBoostedDps = 0;
     }
     /* 2) 停电 3s：屏幕暗，bot AI 索敌半径缩小 */
     G.blackoutT -= dt;
@@ -2161,24 +2734,30 @@ export function update(dt) {
       /* v2.0 §8.20 快递箱视觉：先加"从天空掉落"的 crate fx，落地时才 spawn loot */
       if (!G.crates) G.crates = [];
       G.crates.push({ x: dx, y: dy, fallT: .8, done: false });
-      spawnChip(G, pick(Object.keys(WEAPONS)), 2, dx, dy);   // Lv.2 chip
-      spawnTech(G, pickTechId(), dx + rand(-16, 16), dy + rand(-16, 16), rollTier(true));
-      G.pickups.push({ type: 'heal', amt: 25, x: dx + rand(-16, 16), y: dy + rand(-16, 16), bob: rand(0, 6) });
+      delay(() => {   // loot 与箱子落地同步出现（原来箱子还在天上 loot 已经躺地上了）
+        spawnChip(G, pick(Object.keys(WEAPONS)), 2, dx, dy);   // Lv.2 chip
+        spawnTech(G, pickTechId(), dx + rand(-16, 16), dy + rand(-16, 16), rollTier(true));
+        spawnItem(G, undefined, dx + rand(-20, 20), dy + rand(-20, 20));
+        spawnItem(G, undefined, dx + rand(-20, 20), dy + rand(-20, 20));
+        G.pickups.push({ type: 'heal', amt: 35, x: dx + rand(-18, 18), y: dy + rand(-18, 18), bob: rand(0, 6) });
+      }, .8);
       addFx({ type: 'boom', x: dx, y: dy, r: 40, color: '#ffcf33', life: .5 });
       /* v2.0 §3.5 快递落地砸中伤害：40 半径 25 伤 AoE（防站在原地捡 loot）
        * 用 explodeAt 走环境伤害（owner=G.player 但 quiet 走 zone-style dmg）*/
-      for (const u of G.units) {
-        if (!u.alive) continue;
-        if (dist2(dx, dy, u.x, u.y) < 40 * 40) {
-          u.hp -= 25;
-          u.hurtT = Math.max(u.hurtT || 0, .3);
-          u.stunT = Math.max(u.stunT || 0, .3);
-          if (u.isPlayer) {
-            addFloat(u.x, u.y - 20, '📦 被快递砸了！-25', '#ff6a6a', 8, 1.2);
-            addShake(4);
+      /* 落地伤害延迟到箱子落地动画结束（fallT 0.8s）才结算，且走 applyDamage——
+       * 原来当帧直接 u.hp -= 25，既在动画前就扣血，又能把单位打成负血不死 */
+      delay(() => {
+        for (const u of G.units) {
+          if (!u.alive) continue;
+          if (dist2(dx, dy, u.x, u.y) < 40 * 40) {
+            applyDamage(u, 25, null, { quiet: !u.isPlayer, stun: .3 });
+            if (u.isPlayer) {
+              addFloat(u.x, u.y - 20, '📦 被快递砸了！-25', '#ff6a6a', 8, 1.2);
+              addShake(4);
+            }
           }
         }
-      }
+      }, .8);
       addShake(3);
       addFeed(`📦 快递空投在 (${Math.round(dx)}, ${Math.round(dy)}) 落地（40 半径 25 伤）`, true);
       warn('📦 有物资空投！小心砸中');
@@ -2212,6 +2791,18 @@ export function update(dt) {
   /* v2.0 掩体 tick：破坏倒计时消失 + 可再生 obstacle 定时重生 */
   const propTick = (arr) => {
     for (const o of arr) {
+      if (!o.destroyed && o.spr === 'coffee_machine') o._coffeeCd = Math.max(0, (o._coffeeCd || 0) - dt);
+      /* 电梯全局节拍：原来开门倒计时写在"玩家贴着才执行"的交互循环里，
+       * 等于要在电梯上罚站 45 秒才开门——没人知道电梯怎么用。现在全局走表 */
+      if (!o.destroyed && o.spr === 'elevator') {
+        o._openT = Math.max(0, (o._openT || 0) - dt);
+        o._nextRing = (o._nextRing ?? 45) - dt;
+        if (o._nextRing <= 0) {
+          o._nextRing = 45; o._openT = 3;
+          if (nearPlayer(o.x, o.y)) addFloat(o.x, o.y - 16, '🛗 电梯到了', '#38d3e8', 8, 1.2);
+        }
+        if (o._callT > 0 && G.t - (o._lastCallTouch || 0) > .25) o._callT = 0;   // 人走了，呼叫作废
+      }
       if (o.destroyed) {
         o.destroyedT -= dt;
         if (o.destroyedT <= 0 && o.regenerable) {
@@ -2244,7 +2835,7 @@ export function update(dt) {
     }
 
     /* v2.0 §3.3 走过即触发交互（design 说 F 键，用户要走过触发）：
-     *   咖啡机 走近 3s（累积 dwellT） → 回 15 hp（CD 30s，一局 3 次）
+     *   咖啡机 触碰即喝 → 回血，满血时转为少量护盾（单台库存 + 短 CD）
      *   饮水机 走过 → 3s debuff 免疫
      *   消防栓（sprinkler_head 未破坏）走过一次 → 5s 全场减速 50%（CD 60s）
      *   座机 走过 → 40% 概率骚扰电话
@@ -2268,17 +2859,35 @@ export function update(dt) {
       for (const o of arr) {
         if (o.destroyed) continue;
         if (pl.x < o.x - 8 || pl.x > o.x + o.w + 8 || pl.y < o.y - 8 || pl.y > o.y + o.h + 8) continue;
-        if (o.spr === 'coffee_machine' && pl._coffeeCd <= 0 && pl._coffeeUses < 3) {
-          o._dwellT = (o._dwellT || 0) + dt;
-          if (o._dwellT >= 3) {
-            pl.hp = Math.min(maxHp(pl), pl.hp + 15);
-            pl._coffeeCd = 30; pl._coffeeUses++;
-            o._dwellT = 0;
-            addFloat(o.x, o.y - 16, `☕ 咖啡 +15 hp（${pl._coffeeUses}/3）`, '#8a6a4a', 8, 1.2);
+        if (o.spr === 'coffee_machine' && pl._coffeeCd <= 0 && (o._coffeeCd || 0) <= 0 &&
+            (o._coffeeUses || 0) < (TUNE.coffeeMachineUses || 4)) {
+          const mh = maxHp(pl);
+          const heal = TUNE.coffeeMachineHeal || 16;
+          const shield = TUNE.coffeeMachineShield || 0;
+          if (pl.hp < mh || (shield && (pl.shield || 0) < shield)) {
+            const beforeHp = pl.hp;
+            pl.hp = Math.min(mh, pl.hp + heal);
+            const gained = Math.round(pl.hp - beforeHp);
+            if (shield && gained < heal) {
+              pl.shield = Math.max(pl.shield || 0, shield);
+              pl.shieldT = Math.max(pl.shieldT || 0, 8);
+            }
+            o._coffeeUses = (o._coffeeUses || 0) + 1;
+            o._coffeeCd = TUNE.coffeeMachineCd || 10;
+            pl._coffeeCd = TUNE.coffeePlayerCd || .8;
+            pl._coffeeUses = (pl._coffeeUses || 0) + 1;
+            const left = Math.max(0, (TUNE.coffeeMachineUses || 4) - o._coffeeUses);
+            const msg = gained > 0
+              ? `☕ 咖啡 +${gained} HP${gained < heal && shield ? ` +${shield}盾` : ''}`
+              : `☕ 咖啡 +${shield}盾`;
+            addFloat(o.x, o.y - 16, `${msg}（余 ${left}）`, '#8a6a4a', 8, 1.2);
             SFX.pickup();
           }
         } else if (o.spr === 'cooler') {
-          pl.ignoreDmgT = Math.max(pl.ignoreDmgT || 0, 3);   // debuff 免疫 3s
+          /* 真·debuff 免疫：原来误用 ignoreDmgT（35% 免伤），对诅咒/减速毫无免疫作用 */
+          pl.debuffImmuneT = Math.max(pl.debuffImmuneT || 0, 3);
+          for (const k in pl.curses) pl.curses[k] = 0;
+          pl.oaSlowT = 0;
         } else if (o.spr === 'sprinkler_head' && pl._sprinklerCd <= 0) {
           pl._sprinklerCd = 60;
           for (const u of G.units) {
@@ -2301,23 +2910,30 @@ export function update(dt) {
           const tips = [
             '📌 提示：桌子只挡子弹不挡人',
             '📌 提示：贴绿植 1.5 秒可以隐身',
-            '📌 提示：打爆咖啡机会掉回血光环',
+            '📌 提示：碰到咖啡机可以喝一口回血，打爆还会掉回血光环',
             '📌 提示：老板保险柜里有传说 chip',
-            '📌 提示：茶水间会在第 1 波关闭',
+            '📌 提示：咖啡机不只在茶水区，开放办公区也能补血',
             '📌 提示：卡纸打印机需要打 3 次拿卡',
             '📌 提示：文件柜 5% 是上锁的（掉蒸馏）',
-            '📌 提示：走进电梯可以传送到另一台',
+            '📌 提示：站上电梯呼叫一秒，开门即传送到另一台',
           ];
           const tip = pick(tips);
           addFloat(o.x, o.y - 16, tip, '#7ac8ff', 9, 3);
           setTimeout(() => { if (o) o._tipShown = false; }, 10000);
         } else if (o.spr === 'elevator') {
-          /* v2.0 §3.3 电梯：每 45s 开门 3s，站上去传送到另一个电梯
+          /* v2.0 §3.3 电梯：站上去呼叫 1.2 秒即开门传送（全局每 45s 也会自动到站，计时在 propTick）
            * §6.3(3) 隐藏楼层：走过全 6 chunk 后下次电梯直接送去世界中心大宝藏堆 */
-          o._openT = Math.max(0, (o._openT || 0) - dt);
-          if (!o._nextRing) o._nextRing = 45;
-          o._nextRing -= dt;
-          if (o._nextRing <= 0) { o._nextRing = 45; o._openT = 3; addFloat(o.x, o.y - 16, '🛗 电梯到了', '#38d3e8', 8, 1.2); }
+          if ((o._openT || 0) <= 0 && !pl._elevatorCd) {
+            o._lastCallTouch = G.t;
+            o._callT = (o._callT || 0) + dt;
+            if (o._callT >= 1.2) {
+              o._callT = 0; o._openT = 3;
+              addFloat(o.x, o.y - 16, '🛗 叮！电梯开门了', '#38d3e8', 9, 1.2);
+              SFX.pickup();
+            } else if (Math.random() < dt * 2.5) {
+              addFloat(o.x + o.w / 2, o.y - 12, '🛗 呼叫中…', '#38d3e8', 7, .5);
+            }
+          }
           if (o._openT > 0 && !pl._elevatorCd) {
             if (G.hiddenFloorUnlocked && !G.hiddenFloorConsumed) {
               /* 隐藏楼层：传送到世界中心 + 大宝藏堆 */
@@ -2408,6 +3024,22 @@ export function update(dt) {
       tr2.stunCd = (tr2.stunCd || 0) - dt;
       continue;
     }
+    if (tr2.kind === 'knowledge_base') {
+      if (tr2.cd <= 0) {
+        const t = nearestUnit(tr2.x, tr2.y, tr2.kbRange || 230, o => isFoe(tr2.owner, o));
+        if (t) {
+          tr2.cd = tr2.kbShotCd || .65;
+          if (tr2.owner.mods.__evoOutsourceEmpire) {
+            t.vulnT = Math.max(t.vulnT || 0, .7);
+            t.vulnBonus = Math.max(t.vulnBonus || 0, .12);
+          }
+          spawnBullet(tr2.owner, Math.atan2(t.y - tr2.y, t.x - tr2.x),
+            { x: tr2.x, y: tr2.y - 3, dmg: tr2.kbDmg || 8, spd: 330, range: tr2.kbRange || 230,
+              shape: 'dot', color: '#9ad1ff', _echo: true, pierce: tr2.owner.mods.__evoOutsourceEmpire ? 1 : 0 });
+        } else tr2.cd = .35;
+      }
+      continue;
+    }
     /* v18 新增：主武器 totem 类炮台——每 shotCd 自动索敌开火 */
     if (tr2.kind === 'totem') {
       if (tr2.cd <= 0) {
@@ -2439,7 +3071,7 @@ export function update(dt) {
       if (t) {
         tr2.cd = .7;
         spawnBullet(tr2.owner, Math.atan2(t.y - tr2.y, t.x - tr2.x),
-          { x: tr2.x, y: tr2.y - 3, dmg: SUBS.stapler.shot[tr2.lv - 1] * tr2.owner.mods.dmg,
+          { x: tr2.x, y: tr2.y - 3, dmg: (tr2.shotDmg ?? SUBS.stapler.shot[tr2.lv - 1]) * tr2.owner.mods.dmg,
             spd: 320, range: 190, shape: 'dot', color: '#c9c4b4', _echo: true });
       }
     }
@@ -2525,9 +3157,18 @@ export function update(dt) {
 
 function updateUnit(u, dt) {
   u.hurtT -= dt; u.invulnT -= dt; u.stunT -= dt;
+  /* 通用限时状态衰减 */
+  if (u.debuffImmuneT > 0) { u.debuffImmuneT -= dt; u.oaSlowT = 0; u.reportedT = Math.min(u.reportedT, 0); }
+  if (u.noSplitT > 0) u.noSplitT -= dt;
+  if (u.noRecallT > 0) u.noRecallT -= dt;
+  if (u._muteWide) {   // 强制静音的碰撞体积增大是临时的：到时还原，不再永久叠乘
+    u.muteWidenT -= dt;
+    if (u.muteWidenT <= 0) { u._muteWide = false; u.r /= 1.3; }
+  }
   u.buffs.spdT -= dt; u.buffs.fireT -= dt; u.buffs.dmgT -= dt;
   u.dashT -= dt;
   u.empowerT -= dt; u.reportedT -= dt; u.vulnT -= dt;
+  if (u.vulnT <= 0 && u.vulnBonus) u.vulnBonus = 0;   // 易伤加成随易伤到期归零：原来只增不减，Boss 吃过一次高档易伤就永久按最高档结算
   u.reviewBoostT -= dt; u.oaSlowT -= dt;
   if (u.shield > 0) { u.shieldT -= dt; if (u.shieldT <= 0) u.shield = 0; }
   for (const k in u.curses) if (u.curses[k] > 0) u.curses[k] -= dt;
@@ -2539,7 +3180,7 @@ function updateUnit(u, dt) {
   /* 在线状态徽章：被"已读"标记的敌人延迟引爆 */
   if (u.badgeMarkT > 0) {
     u.badgeMarkT -= dt;
-    if (u.badgeMarkT <= 0 && u.alive && u.badgeMarkOwner) applyDamage(u, wpnDmg(u.badgeMarkOwner) * .5, u.badgeMarkOwner, { quiet: true });
+    if (u.badgeMarkT <= 0 && u.alive && u.badgeMarkOwner) applyDamage(u, wpnDmg(u.badgeMarkOwner) * .5 * (u.badgeMarkMul || 1), u.badgeMarkOwner, { quiet: true });   // Lv3"引爆伤害提升"之前无效
   }
 
   /* 系统提示：自动补盾（补盾量随品级） */
@@ -2553,13 +3194,15 @@ function updateUnit(u, dt) {
       }
     }
   }
+  /* 人设状态机：对所有单位调用——politicsT（办公室政治内耗标记）挂在敌人身上倒计时，
+   * 原来只对玩家调用导致标记永不引爆，这张白卡满5层也完全无效 */
+  updatePersonaSkills(u, dt);
   /* 大模型蒸馏技能自动施放 / 副武器 / 主动技能冷却 */
   if (u.isPlayer) {
     if (u.distills) updateDistills(u, dt);
     updateSubs(u, dt);
     u.activeCd -= dt;
     u.activeQCd -= dt; u.activeECd -= dt;
-    updatePersonaSkills(u, dt);
     /* 版本回滚快照：每 0.5s 记一次，保留 3 秒滑窗（6 个快照） */
     u._histT = (u._histT || 0) - dt;
     if (u._histT <= 0) {
@@ -2587,6 +3230,7 @@ function updateUnit(u, dt) {
   }
   /* 策反到期 */
   if (u.allyOwner && G.t > u.allyUntil) {
+    if (u.opcSummon) recordOpcRetirement(u.allyOwner, u, false);
     u.allyOwner = null;
     killUnit(u, null, 'inject');
     return;
@@ -2614,9 +3258,24 @@ function updateUnit(u, dt) {
       applyDamage(u, d, null, { cause: 'zone', quiet: !u.isPlayer });
     }
   }
-  /* 燃烧区伤害 */
+  /* 燃烧区：伤害 / 治疗光环 / 红线拉齐 */
   for (const bz of G.burns) {
-    if (isFoe(bz.owner, u) && dist2(u.x, u.y, bz.x, bz.y) < bz.r * bz.r) {
+    /* 治疗光环（咖啡飘香 dps<0）：只治主人阵营。原来负 dps 走敌方燃烧累计——既治不了任何人，
+     * 还把敌人的 burnAcc 拖成负数抵消后续真燃烧伤害 */
+    if (bz.dps < 0) {
+      if ((u === bz.owner || (bz.owner && u.allyOwner === bz.owner)) && u.hp < maxHp(u)
+          && dist2(u.x, u.y, bz.x, bz.y) < bz.r * bz.r)
+        u.hp = Math.min(maxHp(u), u.hp - bz.dps * dt);
+      continue;
+    }
+    /* 红线拉齐：敌人贴近红线段每 0.5s 结算一次——redline 载荷原来无任何消费者，大招只有特效没伤害 */
+    if (bz.redline && isFoe(bz.owner, u)
+        && distToSeg(u.x, u.y, bz.redline.x1, bz.redline.y1, bz.redline.x2, bz.redline.y2) < u.r + 7
+        && (u._redlineLast ?? -9) < G.t - .5) {
+      u._redlineLast = G.t;
+      applyDamage(u, bz.redline.dmg, bz.owner, { quiet: false });
+    }
+    if (bz.dps > 0 && isFoe(bz.owner, u) && dist2(u.x, u.y, bz.x, bz.y) < bz.r * bz.r) {
       u.burnAcc = (u.burnAcc || 0) + bz.dps * dt;
       if (u.burnAcc >= 2) { const d = u.burnAcc; u.burnAcc = 0; applyDamage(u, d, bz.owner, { cause: 'burn', quiet: true }); }
     }
@@ -2758,7 +3417,7 @@ function botThink(u, dt) {
       /* v2.0 §3.5 停电事件："导航失效" · 3s 内 bot 索敌半径归零 */
       if (G.blackoutActiveT > 0) baseAggro = 0;
       /* 仇恨爬坡按战斗时间算：转正日空降的同事同样有热身期 */
-      const ramp = Math.min(1, .1 + Math.max(0, G.t - G.trialOffset) / 120);
+      const ramp = Math.min(1, .1 + Math.max(0, combatT()) / 120);
       const aggroR = baseAggro * ramp * (1 + .15 * z.phase);
       let tgt = null, bd = Infinity;
       if (G.trial.active) {
@@ -2767,8 +3426,9 @@ function botThink(u, dt) {
         if (tgt) bd = dist2(u.x, u.y, tgt.x, tgt.y);
       } else {
         /* 被打小报告的人吸引全场仇恨（小报告是群发的，感知半径与索敌无关） */
+        /* 允许"被点名"的精英吸引全场仇恨——chased 词条与甩锅群发都靠这个生效 */
         const snitched = nearestUnit(u.x, u.y, Math.max(450, aggroR * 2), t =>
-          t.reportedT > 0 && isFoe(u, t) && !t.isElite && !t.isBoss);
+          t.reportedT > 0 && isFoe(u, t) && !t.isBoss);
         if (snitched) { tgt = snitched; bd = dist2(u.x, u.y, snitched.x, snitched.y); }
         else for (const t of G.units) {
           if (!isFoe(u, t)) continue;
@@ -2836,7 +3496,7 @@ function botThink(u, dt) {
         const a = Math.atan2(u.y - tgt.y, u.x - tgt.x) + rand(-.4, .4);
         b.wx = clamp(u.x + Math.cos(a) * 150, z.cx - z.r * .85, z.cx + z.r * .85);
         b.wy = clamp(u.y + Math.sin(a) * 150, z.cy - z.r * .85, z.cy + z.r * .85);
-      } else if (tgt && (dogpile || b.pers === 'juan' || provoked || (bd < 85 * 85 && G.t - G.trialOffset >= 30) || z.phase >= 2)) {
+      } else if (tgt && (dogpile || b.pers === 'juan' || provoked || (bd < 85 * 85 && combatT() >= 30) || z.phase >= 2)) {
         b.state = 'fight'; b.target = tgt;
         if (!b.strafe || Math.random() < .3) b.strafe = Math.random() < .5 ? 1 : -1;
         const ideal = (wdef(u).range || 200) * .6;
@@ -2924,7 +3584,7 @@ function botThink(u, dt) {
 /* ---------- 缩圈（时间轴从试用期结束后起算） ---------- */
 function updateZone(dt) {
   if (G.trial.active) return;
-  const bt = G.t - G.trialOffset;   // 战斗时间
+  const bt = combatT();   // 战斗时间（从试用期实际结束起算）
   const z = G.zone, phases = G.zonePhases;   // 试用期越长时间轴越前移（割草流清场快）
   if (z.phase < phases.length && bt >= phases[z.phase].at) {
     const p = phases[z.phase];
@@ -2959,26 +3619,7 @@ function updateZone(dt) {
     SFX.zone();
     z.phase++;
     if (z.phase >= 2) unlockSubSlot();   // 0个月试用期兜底路径：转正路径打不到时靠缩圈进度解锁
-    /* v2.0 Phase F · 部门裁员式关闭 chunk：按当前 phase 关闭对应 chunk 类型 */
-    if (G.chunkGrid) {
-      const closeThisPhase = [];
-      for (let cy = 0; cy < GRID_N; cy++) {
-        for (let cx = 0; cx < GRID_N; cx++) {
-          const type = G.chunkGrid[cy][cx];
-          const ct = CHUNK_TYPES[type];
-          if (!ct || G.chunkClosed[cy][cx]) continue;
-          if (ct.phaseClose === z.phase) {
-            G.chunkClosed[cy][cx] = true;
-            closeThisPhase.push(ct.label || type);
-          }
-        }
-      }
-      if (closeThisPhase.length) {
-        const unique = [...new Set(closeThisPhase)];
-        warn(`🚫 部门优化通知：${unique.join(' / ')} 已关闭，进入者按违规扣血`);
-        addFeed(`部门优化：${unique.join(' / ')} 关闭`, true);
-      }
-    }
+    /* 开放式大平层：不再按 chunk 类型关闭"房间"。危险只来自常规缩圈。 */
     /* 缩圈绩效结算：把成长决策钉在缩圈节拍上，治后期升级断档 */
     if (G.player.alive) {
       gainXp(G.player, 15 * z.phase);
@@ -2993,25 +3634,6 @@ function updateZone(dt) {
     z.cy = lerp(z.fromCy, z.toCy, t);
     if (t >= 1) z.shrinking = false;
   }
-  /* v2.0 Phase F · 关闭 chunk 扣血：走 applyDamage 通道 + 用 1×z.dps 视作圈外
-   *   Gap 1 修复：走 applyDamage（尊重护盾/免死）
-   *   Gap 2 修复：dps = 1×z.dps（不再 0.5×）+ 若已在圈外则跳过防 double 计 */
-  if (G.chunkClosed && G.chunkGrid) {
-    for (const u of G.units) {
-      if (!u.alive || u.isBoss) continue;
-      const ucx = Math.floor(u.x / CHUNK_STRIDE), ucy = Math.floor(u.y / CHUNK_STRIDE);
-      if (ucx < 0 || ucx >= GRID_N || ucy < 0 || ucy >= GRID_N) continue;
-      if (!G.chunkClosed[ucy][ucx]) continue;
-      /* 已在真正圈外：由 outside-zone 分支扣血，不重复叠加 */
-      if (dist(u.x, u.y, z.cx, z.cy) > z.r) continue;
-      u.chunkAcc = (u.chunkAcc || 0) + z.dps * dt;
-      if (u.chunkAcc >= 1) {
-        const d = u.chunkAcc; u.chunkAcc = 0;
-        applyDamage(u, d, null, { cause: 'zone', quiet: !u.isPlayer });
-      }
-      if (u.isPlayer && Math.random() < dt * 2) addFloat(u.x, u.y - 18, '违规进入', '#ff6a6a', 6, .4);
-    }
-  }
 }
 
 /* ---------- Boss：老板 ---------- */
@@ -3023,7 +3645,7 @@ function spawnBoss() {
   const techN = Object.values(pl.tech).reduce((a, b) => a + b, 0);
   const subN = Object.values(pl.subs).reduce((a, s) => a + s.lv, 0);
   const dstN = pl.distills ? Object.keys(pl.distills).length : 0;
-  const bt = Math.max(0, G.t - G.trialOffset);
+  const bt = Math.max(0, combatT());
   /* 血量抬升 + dstN 乘算段：让满 build 玩家真的能吃到"半血狂暴"阶段
    * （原设计：60/90/120/150 系数下满配 hp≈4360，玩家 DPS≈2000 → 狂暴总时长 1-2 秒被踩过）
    * v18 修正：techN/subN/dstN 60→180/90→220/120→280；再叠 (1+0.15×dstN) 乘算段，
@@ -3119,10 +3741,26 @@ function updateSubs(u, dt) {
       if (nearPlayer(u.x, u.y)) SFX.hit();
     } else if (id === 'stapler') {
       s.t = def.cd;
-      const mine = G.turrets.filter(tr => tr.owner === u);
+      /* 只数/拆同类无 kind 炮台：原来不过滤会把知识库炮台、喷淋装置、交付节点一起拆掉 */
+      const mine = G.turrets.filter(tr => tr.owner === u && !tr.kind);
       if (mine.length >= def.count[s.lv - 1]) mine[0].life = 0;   // 旧的拆掉
-      G.turrets.push({ x: u.x + rand(-12, 12), y: u.y + rand(-12, 12), owner: u, lv: s.lv, cd: .3, life: def.life });
+      /* shotDmg 记录自己的伤害表：自动化脚本终端(mimic stapler)原来永远打订书机的 6/9/12 */
+      G.turrets.push({ x: u.x + rand(-12, 12), y: u.y + rand(-12, 12), owner: u, lv: s.lv, cd: .3, life: def.life,
+        shotDmg: (def.shot || SUBS.stapler.shot)[s.lv - 1] });
       addFloat(u.x, u.y - 16, '炮台已部署', '#c9c4b4', 6, .6);
+    } else if (id === 'knowledge_base') {
+      s.t = def.cd * (u.mods.summonCdMul || 1);
+      const maxCount = def.count[s.lv - 1] + (u.mods.__evoOutsourceEmpire ? 2 : 0);
+      const mine = G.turrets.filter(tr => tr.owner === u && tr.kind === 'knowledge_base');
+      while (mine.length >= maxCount) mine.shift().life = 0;
+      const life = def.life[s.lv - 1] * (u.mods.__evoOutsourceEmpire ? 3.5 : 1);
+      G.turrets.push({ x: u.x + rand(-18, 18), y: u.y + rand(-18, 18), owner: u, lv: s.lv, cd: .2,
+        life, kind: 'knowledge_base', kbDmg: def.shot[s.lv - 1] * u.mods.dmg * (1 + (u.mods.summonDmg || 0)),
+        kbRange: 210 + s.lv * 25, kbShotCd: u.mods.__evoOutsourceEmpire ? .45 : .65 });
+      addFloat(u.x, u.y - 16, '知识库上线', '#9ad1ff', 7, .7);
+    } else if (id === 'digital_clone') {
+      s.t = def.cd * (u.mods.summonCdMul || 1);
+      spawnOpcSummon(u, 'clone', { life: def.life[s.lv - 1], dmg: def.dmg[s.lv - 1] });
     } else if (id === 'mug') {
       const r0 = 230 * u.mods.range;
       const t = nearestUnit(u.x, u.y, r0, o => isFoe(u, o));
@@ -3137,6 +3775,60 @@ function updateSubs(u, dt) {
       s.t = def.cd;
       fireBeam(u, Math.atan2(t.y - u.y, t.x - u.x), 270, 3, def.dmg[s.lv - 1] * u.mods.dmg, '#ff4f4f');
       if (nearPlayer(u.x, u.y)) SFX.laser();
+    } else if (id === 'pressure_pills') {
+      /* 降压药丸摇摇乐：近身药雾，敌人减速受伤，玩家按命中回血 */
+      s.t = def.cd;
+      const evo = u.mods.__evoFubaoField ? 1.25 : 1;
+      const r = def.radius[s.lv - 1] * u.mods.range * evo;
+      let hits = 0;
+      for (const t of G.units) {
+        if (!isFoe(u, t) || dist2(u.x, u.y, t.x, t.y) > r * r) continue;
+        t.oaSlowT = Math.max(t.oaSlowT || 0, .6);
+        applyDamage(t, def.dps[s.lv - 1] * u.mods.dmg * evo, u, { quiet: true });
+        hits++;
+      }
+      if (hits) {
+        u.hp = Math.min(maxHp(u), u.hp + def.heal[s.lv - 1] * Math.min(4, hits) * (u.mods.__evoFubaoField ? 1.4 : 1));
+        if (Math.random() < .45) addParts(u.x + rand(-18, 18), u.y + rand(-18, 18), '#7ee08a', 2, 35, .35);
+      }
+    } else if (id === 'labor_gloves') {
+      /* 劳保手套双节棍：近身反打，命中转护盾 */
+      const t = nearestUnit(u.x, u.y, 95, o => isFoe(u, o));
+      if (!t) { s.t = .35; continue; }
+      s.t = def.cd;
+      const ang = Math.atan2(t.y - u.y, t.x - u.x);
+      addFx({ type: 'slash', x: u.x, y: u.y - 4, ang, r: 78, spread: 1.0, color: '#ffcf33', life: .16 });
+      let hits = 0;
+      for (const o of G.units) {
+        if (!isFoe(u, o) || dist(u.x, u.y, o.x, o.y) > 98) continue;
+        let da = Math.atan2(o.y - u.y, o.x - u.x) - ang;
+        while (da > Math.PI) da -= Math.PI * 2;
+        while (da < -Math.PI) da += Math.PI * 2;
+        if (Math.abs(da) < 1.0) { applyDamage(o, def.dmg[s.lv - 1] * u.mods.dmg, u, { stun: .18 }); hits++; }
+      }
+      if (hits) {
+        u.shield = Math.min(maxHp(u), (u.shield || 0) + def.shield[s.lv - 1] * hits);
+        u.shieldT = Math.max(u.shieldT || 0, 6);
+      }
+    } else if (id === 'exit_notice') {
+      /* 离职申请单发射器：命中先贴单，延迟追责爆发 */
+      const t = nearestUnit(u.x, u.y, 250, o => isFoe(u, o));
+      if (!t) { s.t = .4; continue; }
+      s.t = def.cd;
+      spawnBullet(u, Math.atan2(t.y - u.y, t.x - u.x),
+        { shape: 'doc', r: 3, spd: 285, range: 260, color: '#ffcf33',
+          dmg: def.dmg[s.lv - 1] * u.mods.dmg * .45, _echo: true,
+          onHitMark: { slowT: .6, burstT: .9, burstDmg: def.dmg[s.lv - 1] * u.mods.dmg * 1.45 } });
+    } else if (id === 'bonus_check') {
+      /* 年终奖支票·空头：残血兑现，高血只是画饼 */
+      const t = nearestUnit(u.x, u.y, 285, o => isFoe(u, o));
+      if (!t) { s.t = .4; continue; }
+      s.t = def.cd;
+      const threshold = def.execute[s.lv - 1] + (u.mods.executeThreshold || 0) * .35;
+      if (!tryExecuteTarget(u, t, threshold, '空头支票兑现')) {
+        const low = t.hp / maxHp(t) < .45;
+        applyDamage(t, def.dmg[s.lv - 1] * u.mods.dmg * (low ? 2.2 : .65), u, { quiet: !low, stun: low ? .2 : 0 });
+      }
     } else if (id === 'oa_form') {
       /* OA审批流公文包：命中后40%减速2秒+延迟0.8秒引爆叠加伤害 */
       const t = nearestUnit(u.x, u.y, 220, o => isFoe(u, o));
@@ -3164,13 +3856,14 @@ function updateSubs(u, dt) {
       const r = 90 * u.mods.range;
       for (const t of G.units) {
         if (!isFoe(u, t) || t.badgeMarkT > 0 || dist2(u.x, u.y, t.x, t.y) > r * r) continue;
-        if (Math.random() < def.markChance[s.lv - 1]) { t.badgeMarkT = 1.5; t.badgeMarkOwner = u; }
+        if (Math.random() < def.markChance[s.lv - 1]) { t.badgeMarkT = 1.5; t.badgeMarkOwner = u; t.badgeMarkMul = 1 + (s.lv - 1) * .3; }
       }
     } else if (id === 'fitness_ring') {
       /* 健身环挑战：边跑边在身后布下短暂定身圈 */
       if (!u.isMoving) { s.t = .3; continue; }
       s.t = def.cd;
-      G.burns.push({ x: u.x, y: u.y, r: def.radius[s.lv - 1] * u.mods.range, dps: 0, slow: .001, life: 1.2, t: 0, owner: u, color: '#c9a227', ringStun: true });
+      /* dps 取自定义表：待办清单地雷(mimic)宣称"定身+微伤"，原来复用此分支永远 dps:0 */
+      G.burns.push({ x: u.x, y: u.y, r: def.radius[s.lv - 1] * u.mods.range, dps: def.dps ? def.dps[s.lv - 1] * u.mods.dmg : 0, slow: .001, life: 1.2, t: 0, owner: u, color: '#c9a227', ringStun: true });
     }
   }
 }
@@ -3225,7 +3918,7 @@ export function castActive(slot = 'q') {
   if (pl[cdKey] > 0 || (slot === 'q' && !pl.activeQ && pl.activeCd > 0)) { SFX.deny(); return; }
   const id = active.id, lv = active.lv, def = ACTIVES[id];
   if (!def) return;
-  pl[cdKey] = def.cd[lv - 1];
+  pl[cdKey] = def.cd[lv - 1] * (pl.mods.activeCdMul || 1);
   if (slot === 'q') pl.activeCd = pl[cdKey];   // 兼容旧代码用 pl.activeCd 查询
   if (id === 'blink') {
     let mx = 0, my = 0;
@@ -3260,9 +3953,56 @@ export function castActive(slot = 'q') {
         applyDamage(t, d, pl);
       }
     }
+    if (pl.mods.__evoLayoffWave) {
+      const mine = opcSummons(pl);
+      if (mine.length) {
+        const waves = Math.min(6, mine.length);
+        for (const s of mine) {
+          recordOpcRetirement(pl, s, true);
+          s.alive = false;
+          addParts(s.x, s.y, '#9ad1ff', 8, 70, .35);
+        }
+        triggerSeveranceNuke(pl, x2, y2, waves);
+      }
+    }
     addFloat(pl.x, pl.y - 20, '裁员通知已送达', '#ff4f4f', 8, 1);
     addShake(4);
     SFX.laser();
+  } else if (id === 'performance_eliminate') {
+    /* 绩效末位淘汰：点名最低血量目标，低于阈值直接处决；Boss/高血只吃封顶伤害 */
+    const t = G.units.filter(x => x.alive && isFoe(pl, x) && dist2(pl.x, pl.y, x.x, x.y) < 420 * 420)
+      .sort((a, b) => (a.hp / maxHp(a)) - (b.hp / maxHp(b)))[0];
+    if (t) {
+      const threshold = def.threshold[lv - 1] + (pl.mods.executeThreshold || 0) * .45;
+      addFx({ type: 'beam', x1: pl.x, y1: pl.y - 4, x2: t.x, y2: t.y, w: 5, color: '#ff9440', life: .22 });
+      if (!tryExecuteTarget(pl, t, threshold, '末位淘汰')) {
+        const d = Math.min(def.dmg[lv - 1] + maxHp(t) * .08, t.isBoss || t.eliteTier === 2 ? 160 : 220);
+        applyDamage(t, d * pl.mods.dmg, pl, { stun: .25 });
+      }
+      addFloat(pl.x, pl.y - 20, '绩效末位淘汰', '#ff9440', 9, 1);
+      SFX.laser();
+    } else addFloat(pl.x, pl.y - 16, '没有可优化对象', '#9aa4b5', 7, .7);
+  } else if (id === 'blood_donation_van') {
+    /* 献血车驻场：短时回血，但自身处于小额易伤，考验站位 */
+    pl.bloodVanT = def.dur[lv - 1];
+    pl.bloodVanHeal = def.heal[lv - 1];
+    pl.bloodVanVuln = lv >= 3 ? .08 : lv >= 2 ? .12 : .16;
+    pl.hp = Math.min(maxHp(pl), pl.hp + 8 + lv * 4);
+    addFx({ type: 'boom', x: pl.x, y: pl.y, r: 105 + lv * 20, color: '#7ee08a', life: .5 });
+    addFloat(pl.x, pl.y - 22, '献血车驻场', '#7ee08a', 9, 1.1);
+    SFX.pickup();
+  } else if (id === 'blame_mass') {
+    const t = nearestAimTarget(pl, 380 * pl.mods.range) || nearestUnit(pl.x, pl.y, 380, o => isFoe(pl, o));
+    if (t) {
+      pl.opcFocusTarget = t;
+      pl.opcFocusT = def.dur[lv - 1];
+      t.vulnT = Math.max(t.vulnT || 0, def.dur[lv - 1]);
+      t.vulnBonus = Math.max(t.vulnBonus || 0, .25 + lv * .08);
+      applyDamage(t, def.dmg[lv - 1] * pl.mods.dmg * (1 + (pl.mods.summonDmg || 0)), pl, { stun: .2 });
+      addFx({ type: 'beam', x1: pl.x, y1: pl.y - 4, x2: t.x, y2: t.y, w: 5, color: '#9ad1ff', life: .25 });
+      addFloat(pl.x, pl.y - 22, '全体分身：集中甩锅', '#9ad1ff', 9, 1);
+      SFX.laser();
+    } else addFloat(pl.x, pl.y - 16, '没有可甩锅对象', '#9aa4b5', 7, .7);
   } else if (id === 'bing_shield') {
     pl.invulnT = Math.max(pl.invulnT, def.dur[lv - 1]);
     addFloat(pl.x, pl.y - 20, '这饼真香（无敌）', '#ffcf33', 8, 1);
@@ -3292,7 +4032,9 @@ export function castActive(slot = 'q') {
       if (Math.abs(dd) > 1.0) continue;
       t.stunT = Math.max(t.stunT, 1.5);
       t.oaSlowT = Math.max(t.oaSlowT, 2);
-      t.r *= 1.3; t._muteWiden = (t._muteWiden || 0) + 1;
+      /* 碰撞体积临时增大 4s：原来 *=1.3 无恢复逻辑还能无限叠乘，Boss 半径指数膨胀 */
+      if (!t._muteWide) { t._muteWide = true; t.r *= 1.3; }
+      t.muteWidenT = Math.max(t.muteWidenT || 0, 4);
     }
     addFx({ type: 'boom', x: pl.x, y: pl.y, r, color: '#9ad1ff', life: .3 });
     addFloat(pl.x, pl.y - 20, '麦克风已被管理员静音', '#9ad1ff', 8, 1);
@@ -3302,7 +4044,8 @@ export function castActive(slot = 'q') {
     if (pl.mods.__evoDismissalChain) {
       const all = G.units.filter(t => isFoe(pl, t) && dist2(pl.x, pl.y, t.x, t.y) < 500 * 500)
         .sort((a, b) => a.hp - b.hp).slice(0, 6);
-      for (let i = 0; i < all.length - 1; i++) {
+      /* 两两配对：连坐结算要求严格互指，原来链式赋值会被下一次迭代覆盖，只有链尾一对生效 */
+      for (let i = 0; i + 1 < all.length; i += 2) {
         all[i].linkedTo = all[i + 1]; all[i].linkedT = 12;
         all[i + 1].linkedTo = all[i]; all[i + 1].linkedT = 12;
       }
@@ -3331,6 +4074,7 @@ export function castActive(slot = 'q') {
     if (keys.has('KeyA') || keys.has('ArrowLeft')) mx = -1, my = 0;
     if (keys.has('KeyD') || keys.has('ArrowRight')) mx = 1, my = 0;
     pl.invulnT = Math.max(pl.invulnT, def.dur[lv - 1]);
+    pl.hiddenT = Math.max(pl.hiddenT || 0, def.dur[lv - 1]);   // 卡面写"隐身"：现在杂鱼/同事索敌都会失去玩家目标
     pl.buffs.spdT = Math.max(pl.buffs.spdT, def.dur[lv - 1]);
     pl.buffs.spdM = Math.max(pl.buffs.spdM, 2);
     pl.x = clamp(pl.x + mx * 60, 10, TUNE.world - 10);
@@ -3364,7 +4108,7 @@ export function castActive(slot = 'q') {
     addFx({ type: 'boom', x: tx, y: ty, r, color: '#9ad1ff', life: 1.0 });
     const caught = enemiesInRadius(pl, tx, ty, r);
     for (const t of caught) { t.stunT = Math.max(t.stunT, .9 + lv * .15); t.vulnT = Math.max(t.vulnT, 1.8); }
-    later(() => { if (G && pl.alive) explodeAt(tx, ty, r * .75, (22 + lv * 14 + caught.length * 3) * pl.mods.dmg, pl, '#9ad1ff'); }, 850);
+    delay(() => { if (pl.alive) explodeAt(tx, ty, r * .75, (22 + lv * 14 + caught.length * 3) * pl.mods.dmg, pl, '#9ad1ff'); }, .85);
     addFloat(pl.x, pl.y - 20, '截图留痕，稍后追责', '#9ad1ff', 8, 1);
     SFX.zone();
   } else if (id === 'out_of_scope') {
@@ -3432,7 +4176,7 @@ export function castActive(slot = 'q') {
       t.stunT = Math.max(t.stunT, .8 + lv * .2); t.vulnT = Math.max(t.vulnT, 1.8);
     }
     addFx({ type: 'boom', x: pl.x, y: pl.y, r, color: '#ffcf33', life: .45 });
-    later(() => { if (G && pl.alive) explodeAt(pl.x, pl.y, r * .55, (28 + lv * 16) * pl.mods.dmg, pl, '#ffcf33'); }, 700);
+    delay(() => { if (pl.alive) explodeAt(pl.x, pl.y, r * .55, (28 + lv * 16) * pl.mods.dmg, pl, '#ffcf33'); }, .7);
     addFloat(pl.x, pl.y - 20, '先拉个会', '#ffcf33', 9, 1); SFX.explo();
   } else if (id === 'leader_decides') {
     /* 让领导拍板：审批光束打最高血敌人；击杀返还 40% CD */
@@ -3520,7 +4264,7 @@ export function castActive(slot = 'q') {
     /* 组织架构调整：范围内敌人随机传送 + 易伤混乱状态 */
     const r = def.radius[lv - 1];
     const vulnDur = 3 + lv;                        // 4s / 5s / 6s
-    const vulnBonus = .3 + lv * .1;                // 0.3 / 0.4 / 0.5
+    const vulnBonus = .2 + lv * .1;                // 0.3 / 0.4 / 0.5（原 .3+lv*.1 比卡面多一档）
     const targets = lv >= 3 ? G.units.filter(t => t.alive && isFoe(pl, t) && !t.isBoss) : enemiesInRadius(pl, pl.x, pl.y, r).filter(t => !t.isBoss);
     for (const t of targets) {
       const a = rand(0, Math.PI * 2), rr = rand(80, 220);
@@ -3534,6 +4278,42 @@ export function castActive(slot = 'q') {
     addFx({ type: 'boom', x: pl.x, y: pl.y, r, color: '#c58fff', life: .5 });
     addFloat(pl.x, pl.y - 20, `组织架构调整：${targets.length} 人重新汇报`, '#c58fff', 9, 1.2);
     SFX.explo(); addShake(3);
+  } else if (id === 'resignation_bomb') {
+    /* 自爆式辞职信：按已损失生命放大范围爆发，自己获得短暂无敌但不扣血 */
+    const r = def.radius[lv - 1] * pl.mods.range;
+    const missing = Math.max(20, maxHp(pl) - pl.hp);
+    const dmg = (34 + missing * (.95 + lv * .25)) * pl.mods.dmg;
+    pl.invulnT = Math.max(pl.invulnT, .8 + lv * .15);
+    addFx({ type: 'boom', x: pl.x, y: pl.y, r, color: '#ff9440', life: .5 });
+    for (const t of enemiesInRadius(pl, pl.x, pl.y, r)) {
+      const cap = t.isBoss || t.eliteTier === 2 ? 190 : 360;
+      applyDamage(t, Math.min(dmg, cap), pl, { stun: .25 + lv * .1 });
+    }
+    addFloat(pl.x, pl.y - 22, '自爆式辞职信', '#ff9440', 10, 1.2);
+    SFX.explo(); addShake(5);
+  } else if (id === 'no_clockout') {
+    /* 我不下班了：扣当前生命换爆发，期间部分伤害转欠薪延迟结算，击杀可抵扣 */
+    const dur = def.dur[lv - 1];
+    const cost = Math.min(pl.hp - 1, Math.max(12, pl.hp * .25));
+    if (cost > 0) pl.hp -= cost;
+    pl.noClockoutT = dur;
+    pl.wageDebt = 0;
+    pl.buffs.spdT = Math.max(pl.buffs.spdT, dur); pl.buffs.spdM = Math.max(pl.buffs.spdM, 1.25 + lv * .1);
+    pl.buffs.fireT = Math.max(pl.buffs.fireT, dur); pl.buffs.fireM = Math.max(pl.buffs.fireM, 1.35 + lv * .12);
+    pl.buffs.dmgT = Math.max(pl.buffs.dmgT, dur); pl.buffs.dmgM = Math.max(pl.buffs.dmgM, 1.15 + lv * .08);
+    addFx({ type: 'boom', x: pl.x, y: pl.y, r: 130, color: '#ffcf33', life: .4 });
+    addFloat(pl.x, pl.y - 22, '我不下班了', '#ffcf33', 10, 1.2);
+    SFX.fuse(); addShake(4);
+  } else if (id === 'fake_busy_staffing') {
+    pl.invulnT = Math.max(pl.invulnT, def.dur[lv - 1]);
+    pl.buffs.fireT = Math.max(pl.buffs.fireT, def.dur[lv - 1] + 1);
+    pl.buffs.fireM = Math.max(pl.buffs.fireM, 1.18);
+    const count = def.count[lv - 1];
+    for (let i = 0; i < count; i++)
+      spawnOpcSummon(pl, i % 3 === 0 ? 'wall' : 'contractor', { life: 9 + lv * 2, ang: Math.PI * 2 * i / count });
+    addFx({ type: 'boom', x: pl.x, y: pl.y, r: 145, color: '#9ad1ff', life: .45 });
+    addFloat(pl.x, pl.y - 22, '虚假繁忙：分身代班', '#9ad1ff', 10, 1.2);
+    SFX.pickup();
   }
   bridge.notify();
 }
@@ -3564,11 +4344,8 @@ function spawnLateBots() {
     /* 模组数从 floor(months/2) 提到 months+1（3月档给4个模组，超过玩家试用期均值） */
     for (let k = 0; k < months + 1; k++)
       applyTechPickup(u, pick(Object.keys(TECH).filter(t => !PLAYER_ONLY_TECH.includes(t) && !TECH[t].instant)), rollTier(months >= 3));
-    /* months≥2 时 50% 概率给一件 Lv.2 副武器（试用期长的档位同事装备更成型） */
-    if (months >= 2 && Math.random() < .5) {
-      const subId = pick(Object.keys(SUBS));
-      u.subs[subId] = { lv: Math.min(2, SUBS[subId].maxLv), t: 0, ang: rand(0, 6) };
-    }
+    /* （移除）原"50% 概率给同事一件副武器"：updateSubs 只对玩家执行，
+     * 同事的副武器永远不会开火，纯属摆设——如需真实装备需先给 bot 接 updateSubs */
   }
   G.latentBots = null;
 }
@@ -3585,7 +4362,8 @@ function spawnMob(type, x, y, isChild = false, month = 1) {
   u.chaseOffX = rand(-20, 20); u.chaseOffY = rand(-20, 20);
   u.mobTouch = m.touch * (1 + .08 * (month - 1));
   u.mobXp = m.xp + (month - 1);
-  u.spr = SPR[m.spr];
+  u.spr = SPR[m.spr] || SPR.mob_email;   // 兜底：精灵未注册时用邮件占位，避免渲染崩溃
+  u.sprKey = m.spr;   // render 层 PNG 高清覆盖用
   u.r = 3; u.level = 0; u.spdBase = m.spd * rand(.9, 1.1);
   if (m.shieldHp) { u.mobShieldHp = m.shieldHp * k; u.mobShieldBroken = false; u.mods.dmgTaken = .2; }
   if (m.dodgeOverride) u.mods.dodge = m.dodgeOverride;
@@ -3647,6 +4425,16 @@ function updateMob(u, dt) {
       addFeed(`公共事故「${m.publicIncident}」失控：锅值 +${pot}`, true);
       addFx({ type: 'boom', x: u.x, y: u.y, r: 60, color: '#ff4f4f', life: .4 });
       addFloat(u.x, u.y - 22, `锅 +${pot}`, '#ff6a6a', 9, 1.2);
+      /* 锅值爆表兑现——之前 pot 只涨不用，威胁纯属恐吓 */
+      if (G.player.pot >= 100 && G.player.alive) {
+        G.player.pot = 0;
+        G.player.reportedT = Math.max(G.player.reportedT || 0, 6);
+        G.player.vulnT = Math.max(G.player.vulnT || 0, 4);
+        G.player.vulnBonus = Math.max(G.player.vulnBonus || 0, .15);
+        warn('🧾 锅值爆表：季度审计立案——6 秒被全场举报 + 易伤');
+        addFeed('锅值攒满 100：被立案审计', true);
+        SFX.deny(); addShake(4);
+      }
       u.alive = false; u.hp = 0;
     }
     return;
@@ -3663,9 +4451,9 @@ function updateMob(u, dt) {
       u.alarmT = m.alarmCd;
       const px = G.player.x, py = G.player.y;
       addFx({ type: 'boom', x: px, y: py, r: m.alarmR, color: '#ffcf33', life: m.alarmDelay });
-      later(() => {
+      delay(() => {
         if (u.alive) explodeAt(px, py, m.alarmR, m.alarmDmg, u, '#ff4f4f');
-      }, m.alarmDelay * 1000);
+      }, m.alarmDelay);
     }
     return;   // 站桩不移动
   }
@@ -3679,6 +4467,7 @@ function updateMob(u, dt) {
       u.spdBase = newM.spd * (u.spdBase / m.spd);   // 保持个体差异
       u.mobTouch = newM.touch * (u.mobTouch / m.touch);
       u.spr = SPR[newM.spr];
+      u.sprKey = newM.spr;
       if (nearPlayer(u.x, u.y)) addFloat(u.x, u.y - 12, '加急！', '#ff4f4f', 7, .8);
     }
   }
@@ -3696,8 +4485,10 @@ function updateMob(u, dt) {
     }
   }
   /* v18：钓鱼邮件——保持距离 200-260px + 周期性发射钓鱼链接减速弹（只做保距+射，不接触伤害）
-   *   试用期波次里强制切追击（keepDist 会导致波次卡在"敌人不来找玩家"）*/
-  if (m.keepDist && m.fireBulletSlow && !u.trialSubWave) {
+   * 钓鱼邮件保距射手：原条件 !u.trialSubWave 与它唯一的生成路径（试用期波次）互斥，
+   * 远程射手机制从未在任何对局出现过。保距目标 230px 仍在玩家可打范围内，波次不会卡。
+   * v2.2：PUA 大师复用本分支（fireBulletVuln 弹=画的饼，命中挂易伤） */
+  if (m.keepDist && (m.fireBulletSlow || m.fireBulletVuln)) {
     u.mobFireCd = (u.mobFireCd ?? m.fireCd) - dt;
     const px = G.player.x, py = G.player.y;
     const dPl = Math.hypot(u.x - px, u.y - py);
@@ -3713,9 +4504,124 @@ function updateMob(u, dt) {
       u.mobFireCd = m.fireCd;
       const a = Math.atan2(py - u.y, px - u.x);
       spawnBullet(u, a, { dmg: m.fireBulletDmg, spd: m.fireBulletSpd, range: m.fireBulletRange,
-        shape: 'dot', r: 3, color: '#b665ff', curse: { id: 'overfit', dur: 2 } });
+        shape: 'dot', r: 3, color: m.fireBulletVuln ? '#ffcf33' : '#b665ff',
+        curse: m.fireBulletVuln ? null : { id: 'overfit', dur: 2 }, vuln: m.fireBulletVuln || null });
     }
     return;   // 保距射手不走"追击撞击"路径
+  }
+  /* ---------- v2.2 新增行为品类 ---------- */
+  /* KPI 气球：近身点燃引信（预警圈）→ 站定膨胀 → 自爆；死亡走 killUnit 保证波次计数 */
+  if (m.kamikaze) {
+    if (u.fuseT !== undefined) {
+      u.fuseT -= dt;
+      if (Math.random() < dt * 20) addParts(u.x, u.y - 6, '#ff6a6a', 1, 30, .25);
+      if (u.fuseT <= 0) {
+        explodeAt(u.x, u.y, m.kamikaze.r, m.kamikaze.dmg * (1 + .15 * ((u.mobMonth || 1) - 1)), u, '#ff6a6a');
+        killUnit(u, null, 'explode');
+        return;
+      }
+      moveWithCollide(u, 0, 0, dt);
+      return;
+    }
+    if (G.player.alive && dist2(u.x, u.y, G.player.x, G.player.y) < 52 * 52) {
+      u.fuseT = m.kamikaze.fuse;
+      addFx({ type: 'ringwarn', x: u.x, y: u.y, r: m.kamikaze.r, color: '#ff6a6a', life: m.kamikaze.fuse });
+      if (nearPlayer(u.x, u.y)) addFloat(u.x, u.y - 12, 'KPI 要爆了！', '#ff6a6a', 7, .6);
+    }
+    /* 未点燃时落到普通追击路径 */
+  }
+  /* 狼性文化训练生：中距离蓄力（红线预警）→ 高速突进 → 冷却；其余时间普通追击 */
+  if (m.charger) {
+    const pl2 = G.player;
+    if (u.dashPhase === 'wind') {
+      u.phaseT -= dt; u.mobHitT -= dt;
+      if (pl2.alive) u.aim = Math.atan2(pl2.y - u.y, pl2.x - u.x);
+      moveWithCollide(u, 0, 0, dt);
+      if (u.phaseT <= 0) { u.dashPhase = 'dash'; u.phaseT = m.charger.dashT; u.dashDir = u.aim; }
+      return;
+    }
+    if (u.dashPhase === 'dash') {
+      u.phaseT -= dt; u.mobHitT -= dt;
+      const boost = m.charger.dashSpd / u.spdBase;
+      moveWithCollide(u, Math.cos(u.dashDir) * boost, Math.sin(u.dashDir) * boost, dt);
+      u.walkT += dt * 10;
+      if (pl2.alive && u.mobHitT <= 0 && dist(u.x, u.y, pl2.x, pl2.y) < u.r + pl2.r + 4) {
+        u.mobHitT = .8;
+        applyDamage(pl2, u.mobTouch * 1.6, u, { stun: .12 });
+      }
+      if (u.phaseT <= 0) { u.dashPhase = null; u.chargeCd = m.charger.cd; }
+      return;
+    }
+    u.chargeCd = (u.chargeCd ?? rand(.4, 1.4)) - dt;
+    if (pl2.alive && u.chargeCd <= 0) {
+      const dP = dist(u.x, u.y, pl2.x, pl2.y);
+      if (dP < 230 && dP > 40) {
+        u.dashPhase = 'wind'; u.phaseT = m.charger.windup;
+        addFx({ type: 'beam', x1: u.x, y1: u.y, x2: pl2.x, y2: pl2.y, w: 2, color: '#ff6a6a', life: m.charger.windup });
+        if (nearPlayer(u.x, u.y)) addFloat(u.x, u.y - 12, '狼性冲锋！', '#ff6a6a', 7, .7);
+        moveWithCollide(u, 0, 0, dt);
+        return;
+      }
+    }
+    /* 冷却/超距期间落到普通追击路径 */
+  }
+  /* 工资小偷：满场偷吃经验豆（吃进肚里），被玩家逼近就跑；死亡吐 1.5 倍（见 killUnit） */
+  if (m.thief) {
+    u.mobHitT -= dt;
+    let bag = null, bd2 = 420 * 420;
+    for (const p2 of G.pickups) {
+      if (p2.dead || p2.type !== 'xp') continue;
+      const d2v = dist2(u.x, u.y, p2.x, p2.y);
+      if (d2v < bd2) { bd2 = d2v; bag = p2; }
+    }
+    const pl2 = G.player;
+    if (bag) {
+      const a = Math.atan2(bag.y - u.y, bag.x - u.x);
+      u.aim = a; moveWithCollide(u, Math.cos(a), Math.sin(a), dt); u.walkT += dt * 8;
+      if (bd2 < 9 * 9) {
+        bag.dead = true;
+        u.stolenXp = (u.stolenXp || 0) + (bag.amt || 1);
+        if (nearPlayer(u.x, u.y)) addFloat(u.x, u.y - 10, '¥ 到手', '#ffcf33', 6, .6);
+      }
+    } else if (pl2.alive && dist2(u.x, u.y, pl2.x, pl2.y) < 200 * 200) {
+      const a = Math.atan2(u.y - pl2.y, u.x - pl2.x);   // 没豆可偷就避着玩家跑
+      u.aim = a; moveWithCollide(u, Math.cos(a), Math.sin(a), dt); u.walkT += dt * 8;
+    } else moveWithCollide(u, 0, 0, dt);
+    return;
+  }
+  /* 全员会议黑洞：把范围内的玩家往自己身上吸（不打断行动，纯位移压力） */
+  if (m.pullR && G.player.alive) {
+    const pl2 = G.player;
+    const dP2 = dist2(u.x, u.y, pl2.x, pl2.y);
+    if (dP2 < m.pullR * m.pullR && dP2 > 24 * 24) {
+      const a = Math.atan2(u.y - pl2.y, u.x - pl2.x);
+      const pull = (m.pullPow || 40) * dt;
+      pl2.x += Math.cos(a) * pull; pl2.y += Math.sin(a) * pull;
+      if (Math.random() < dt * 6) addParts(pl2.x + rand(-6, 6), pl2.y + rand(-6, 6), '#b665ff', 1, 24, .3);
+    }
+  }
+  /* 加班蜗牛：身后拖减速粘液带（复用燃烧区 slow 通道，只影响玩家阵营） */
+  if (m.slowTrail) {
+    u.trailT = (u.trailT ?? 0) - dt;
+    if (u.trailT <= 0) {
+      u.trailT = m.slowTrail.drop;
+      G.burns.push({ x: u.x, y: u.y, r: m.slowTrail.r, dps: 0, slow: m.slowTrail.slow, life: m.slowTrail.life, t: 0, owner: u, color: '#38d3e8' });
+    }
+  }
+  /* HR 实习生：周期呼叫支援（召唤物 trialSubWave 置空，不影响波次目标计数） */
+  if (m.summon) {
+    u.sumCd = (u.sumCd ?? m.summon.cd * rand(.4, .9)) - dt;
+    if (u.sumCd <= 0) {
+      u.sumCd = m.summon.cd;
+      const kin = G.units.filter(x => x.alive && x.isMob && x.summonedBy === u).length;
+      if (kin < m.summon.cap && G.player.alive && dist2(u.x, u.y, G.player.x, G.player.y) < 400 * 400) {
+        for (let i = 0; i < m.summon.count; i++) {
+          const s = spawnMob(m.summon.type, u.x + rand(-24, 24), u.y + rand(-24, 24), false, u.mobMonth);
+          s.summonedBy = u; s.trialSubWave = null;
+        }
+        if (nearPlayer(u.x, u.y)) addFloat(u.x, u.y - 12, '呼叫支援！', '#ff9edb', 7, .8);
+      }
+    }
   }
   /* 需求评审会：据点型不移动，给附近其它杂鱼持续刷新"评审通过"加速标记（speedOf 里读取），
      怪死亡后标记自然到期，不需要手动复位，避免"评审会死了但杂鱼还留有加速buff"的残留状态 */
@@ -3760,8 +4666,11 @@ function updateMob(u, dt) {
     }
   }
   u.mobHitT -= dt;
-  if (!u.mobTarget || !u.mobTarget.alive || Math.random() < .008) {
-    u.mobTarget = nearestUnit(u.x, u.y, 600, t => isWorker(t) && t.alive && !t.isSummon);
+  if (!u.mobTarget || !u.mobTarget.alive || u.mobTarget.hiddenT > 0 || Math.random() < .008) {
+    /* 隐身（贴绿植/临时下线）与低仇恨（办公室小透明 aggro<1）现在对杂鱼也生效——
+     * 原来只有同事 AI 看这两个字段，试用期整个隐身/仇恨体系对怪物无效 */
+    u.mobTarget = nearestUnit(u.x, u.y, 600, t => isWorker(t) && t.alive && !t.isSummon && !(t.hiddenT > 0)
+      && !(t.isPlayer && t.mods.aggro < 1 && dist2(u.x, u.y, t.x, t.y) > (600 * t.mods.aggro) * (600 * t.mods.aggro)));
   }
   const t = u.mobTarget;
   if (!t) { moveWithCollide(u, 0, 0, dt); return; }
@@ -3811,8 +4720,45 @@ function updateSummon(u, dt) {
   const owner = u.allyOwner;
   if (!owner || !owner.alive) { u.alive = false; return; }
   const dOwner = dist(u.x, u.y, owner.x, owner.y);
-  const tgt = nearestUnit(u.x, u.y, 190, t => isFoe(u, t));
+  let tgt = owner.opcFocusT > 0 && owner.opcFocusTarget && owner.opcFocusTarget.alive ? owner.opcFocusTarget
+    : nearestUnit(u.x, u.y, u.opcSummon ? 260 : 190, t => isFoe(u, t));
   let mvx = 0, mvy = 0;
+  if (u.opcSummon) {
+    if (tgt && (dOwner < 250 || owner.opcFocusT > 0)) {
+      const a = Math.atan2(tgt.y - u.y, tgt.x - u.x);
+      u.aim = a;
+      if (u.summonType === 'opc_wall' && dist2(u.x, u.y, tgt.x, tgt.y) > 22 * 22) {
+        mvx = Math.cos(a); mvy = Math.sin(a);
+      } else if (dOwner > 130) {
+        const b = Math.atan2(owner.y - u.y, owner.x - u.x);
+        mvx = Math.cos(b); mvy = Math.sin(b);
+      }
+    } else if (dOwner > 48) {
+      const a = Math.atan2(owner.y - u.y, owner.x - u.x);
+      mvx = Math.cos(a); mvy = Math.sin(a); u.aim = a;
+    }
+    moveWithCollide(u, mvx, mvy, dt);
+    u.sumT -= dt;
+    if (u.sumT > 0) return;
+    if (!tgt) { u.sumT = .35; return; }
+    if (u.summonType === 'opc_wall') {
+      if (dist2(u.x, u.y, tgt.x, tgt.y) < (u.r + tgt.r + 12) * (u.r + tgt.r + 12)) {
+        u.sumT = u.opcShotCd || .9;
+        applyDamage(tgt, 8 * owner.mods.dmg * (1 + (owner.mods.summonDmg || 0)), u, { stun: .18 });
+      } else u.sumT = .2;
+    } else {
+      u.sumT = (u.opcShotCd || .7) / Math.min(1.6, fireRateOf(owner));
+      if (owner.mods.__evoOutsourceEmpire) {
+        tgt.vulnT = Math.max(tgt.vulnT || 0, .5);
+        tgt.vulnBonus = Math.max(tgt.vulnBonus || 0, .10);
+      }
+      spawnBullet(u, Math.atan2(tgt.y - u.y, tgt.x - u.x) + rand(-.05, .05),
+        { dmg: Math.max(3, wpnDmg(owner) * (u.opcDmgMul || .35)), spd: 310, range: 250,
+          shape: u.summonType === 'opc_clone' ? 'streak' : 'dot', color: u.opcSenior ? '#ffcf33' : '#9ad1ff',
+          _echo: true, pierce: u.opcSenior || owner.mods.__evoOutsourceEmpire ? 1 : 0 });
+    }
+    return;
+  }
   /* 跟随主人；卷王替身会主动扑向敌人 */
   if (u.summonType === 'intern' && tgt && dOwner < 220) {
     const a = Math.atan2(tgt.y - u.y, tgt.x - u.x);
@@ -4083,6 +5029,18 @@ function updateElite(u, dt) {
   /* v2.0：部门 Boss/试用期 Boss 用 e.ai 指向已实现的行为分支，绕开新增 AI 代码 */
   const beh = (e && e.ai) || u.eliteType;
   u.touchT -= dt;
+  /* 精英词条：临时OOO——周期性闪现+短无敌（原来是全工程无消费的空壳标记） */
+  if (u._oooBlink) {
+    u.oooT = (u.oooT ?? 6) - dt;
+    if (u.oooT <= 0 && u.invulnT <= 0) {
+      u.oooT = 6;
+      u.invulnT = Math.max(u.invulnT, .8);
+      const ba = rand(0, Math.PI * 2);
+      u.x = clamp(u.x + Math.cos(ba) * 70, 30, TUNE.world - 30);
+      u.y = clamp(u.y + Math.sin(ba) * 70, 30, TUNE.world - 30);
+      if (nearPlayer(u.x, u.y)) addFloat(u.x, u.y - 18, 'OOO 中，勿 cue', '#38d3e8', 7, .8);
+    }
+  }
 
   /* PPT 大师的光锥爆发（预警到期即结算，独立于索敌） */
   if (beh === 'ppt' && u.coneWarnT > 0) {
@@ -4097,7 +5055,7 @@ function updateElite(u, dt) {
         while (da > Math.PI) da -= Math.PI * 2;
         while (da < -Math.PI) da += Math.PI * 2;
         if (Math.abs(da) < .55) {
-          applyDamage(t, 18, u, { stun: .8 });
+          applyDamage(t, 18 * u.mods.dmg, u, { stun: .8 });   // 精英增伤词条（值班/KPI/P0…）现在真实生效
           if (t.isPlayer) addFloat(t.x, t.y - 22, '被迫听完整场演示', '#e8e4d8', 7, 1);
         }
       }
@@ -4122,7 +5080,7 @@ function updateElite(u, dt) {
     if (u.injT <= 0 && d < 320) {
       u.injT = 1.6;
       spawnBullet(u, a + rand(-.06, .06),
-        { dmg: 7, spd: 260, range: 340, shape: 'streak', color: '#c58fff',
+        { dmg: 7 * u.mods.dmg, spd: 260, range: 340, shape: 'streak', color: '#c58fff',
           curse: { id: pick(['repeat', 'overflow']), dur: 5 } });
     }
   } else if (beh === 'ppt') {
@@ -4134,7 +5092,7 @@ function updateElite(u, dt) {
     if (u.slideT <= 0 && d < 300 && u.coneWarnT <= 0) {
       u.slideT = 2.2;
       for (let i = -1; i <= 1; i++)
-        spawnBullet(u, a + i * .25, { dmg: 9, spd: 200, range: 320, shape: 'slide', r: 3, color: '#e8e4d8' });
+        spawnBullet(u, a + i * .25, { dmg: 9 * u.mods.dmg, spd: 200, range: 320, shape: 'slide', r: 3, color: '#e8e4d8' });
     }
     u.coneCd -= dt;
     if (u.coneCd <= 0 && d < 140 && u.coneWarnT <= 0) {
@@ -4162,7 +5120,7 @@ function updateElite(u, dt) {
     u.pokeT -= dt;
     if (u.pokeT <= 0 && d < 180) {
       u.pokeT = 1.8;
-      spawnBullet(u, a, { dmg: 6, spd: 240, range: 200, shape: 'dot', color: '#c9a227' });
+      spawnBullet(u, a, { dmg: 6 * u.mods.dmg, spd: 240, range: 200, shape: 'dot', color: '#c9a227' });
     }
   } else if (beh === 'snitch') {
     /* 远远放风筝，定期打小报告 */
@@ -4191,7 +5149,7 @@ function updateElite(u, dt) {
         G.burns.push({ x: ip.x, y: ip.y, r: 45, dps: 3, slow: .4, life: 4, t: 0, owner: u, color: '#6aa3ff' });
         for (const t2 of G.units) {
           if (!isFoe(u, t2) || dist2(ip.x, ip.y, t2.x, t2.y) > 45 * 45) continue;
-          applyDamage(t2, 6, u);
+          applyDamage(t2, 6 * u.mods.dmg, u);
           if (t2.isPlayer) addFloat(t2.x, t2.y - 20, '被拉进会了', '#6aa3ff', 7, 1);
         }
       }
@@ -4219,7 +5177,7 @@ function updateElite(u, dt) {
         for (const t2 of G.units) {
           if (!isFoe(u, t2) || dist2(u.x, u.y, t2.x, t2.y) > 150 * 150) continue;
           if (t2.standT > .45) {
-            applyDamage(t2, 15, u);
+            applyDamage(t2, 15 * u.mods.dmg, u);
             addFloat(t2.x, t2.y - 20, '摸鱼被抓！', '#ffcf33', 7, 1);
           }
         }
@@ -4240,7 +5198,7 @@ function updateElite(u, dt) {
   u.walkT += dt * 6;
   if (e.touch && u.touchT <= 0 && d < u.r + tgt.r + 3) {
     u.touchT = beh === 'hallu' ? .9 : 1.1;
-    const touchDmg = e.touch + (beh === 'intern' ? (1 - u.hp / maxHp(u)) * 14 : 0);   // 狼性成长
+    const touchDmg = (e.touch + (beh === 'intern' ? (1 - u.hp / maxHp(u)) * 14 : 0)) * u.mods.dmg;   // 狼性成长 × 词条增伤
     applyDamage(tgt, touchDmg, u);
     if (e.curse) applyCurse(tgt, e.curse, e.curseDur);
     const push = Math.atan2(tgt.y - u.y, tgt.x - u.x);
@@ -4395,6 +5353,7 @@ function updateProjs(dt) {
         if (p.boom) { doBoom(p); break; }
         applyDamage(t, p.dmg, p.owner, { stun: p.stun });
         if (p.curse) applyCurse(t, p.curse.id, p.curse.dur);
+        if (p.vuln) { t.vulnT = Math.max(t.vulnT || 0, p.vuln.t); t.vulnBonus = Math.max(t.vulnBonus || 0, p.vuln.bonus); }   // PUA 的饼：吃了更疼
         /* OA审批流公文包：命中后延迟引爆叠加伤害+减速 */
         if (p.onHitMark) {
           t.oaSlowT = p.onHitMark.slowT; t.oaBurstT = p.onHitMark.burstT;
@@ -4435,7 +5394,8 @@ function doBoom(p) {
   explodeAt(p.x, p.y, p.boom.r, p.boom.dmg, p.owner, p.color, p.boom.burn || null);
   /* 画饼成真的"护盾饼"：落地丢一个护盾拾取（heal 类型可复用现有拾取合并逻辑） */
   if (p.boom.dropShield && p.owner && p.owner.isPlayer) {
-    G.pickups.push({ type: 'heal', x: p.x, y: p.y, bob: rand(0, 6), heal: 0, shield: p.boom.dropShield });
+    /* P0 修复：必须带 amt——Bot 吃 heal 走 hp + p.amt，undefined 会把 Bot 血量变 NaN 成为打不死的僵尸 */
+    G.pickups.push({ type: 'heal', x: p.x, y: p.y, bob: rand(0, 6), amt: 0, shield: p.boom.dropShield });
   }
 }
 
@@ -4491,8 +5451,8 @@ function updatePickups(dt) {
         }
         if (u.hp >= maxHp(u)) continue;   // 满血留给需要的人
         p.dead = true;
-        u.hp = Math.min(maxHp(u), u.hp + p.amt);
-        if (u.isPlayer) addFloat(p.x, p.y - 8, `+${p.amt}`, '#7ee08a', 6, .5);
+        u.hp = Math.min(maxHp(u), u.hp + (p.amt || 0));   // 防御：amt 缺失时不得产生 NaN
+        if (u.isPlayer) addFloat(p.x, p.y - 8, `+${p.amt || 0}`, '#7ee08a', 6, .5);
         break;
       }
       if (p.type === 'item') {
@@ -4619,7 +5579,7 @@ function endChecks(dt) {
   }
   if (!G.player.alive) return;
   /* Boss 双门槛：战斗时间 300s 或场上只剩 3 个牛马——保证多数对局都能见到老板 */
-  if (!G.bossSpawned && !G.trial.active && (G.t - G.trialOffset >= 300 || aliveWorkers() <= 3)) spawnBoss();
+  if (!G.bossSpawned && !G.trial.active && (combatT() >= 300 || aliveWorkers() <= 3)) spawnBoss();
   if (G.winT === undefined && aliveWorkers() === 1 && G.bossSpawned && G.bossDead) {
     G.winT = 1.2;
     G.winLine = pick(COPY.winLines);
@@ -4637,6 +5597,21 @@ function endChecks(dt) {
 /* ---------- 升级三选一（混合卡池：白卡技能 / 蓝卡副武器 / 紫卡主动 / 金卡精修） ---------- */
 let levelChoices = [];
 export const getLevelChoices = () => levelChoices;
+const PERSONA_LABELS = {
+  optimizer: '首席降本增效官',
+  slacker: '摸鱼表演艺术家',
+  rlhf: '人肉 RLHF 训练员',
+  revival: '万年活人矿·二次入职',
+  opc: '一人公司 OPC',
+};
+const PERSONA_STARTER_SKILLS = [
+  { persona: 'optimizer', skillId: 'office_politics' },
+  { persona: 'slacker', skillId: 'mouse_jiggler' },
+  { persona: 'rlhf', skillId: 'rlhf_piecework_labeling' },
+  { persona: 'revival', skillId: 'revival_grind_body' },
+  { persona: 'opc', skillId: 'opc_contract_worker' },
+];
+function personaLabel(id) { return PERSONA_LABELS[id] || id; }
 /* ---------- 槽位容量修复：里程碑事件解锁副武器第4槽 ----------
  * 触发点：转正（spawnLateBots）或 0 个月试用期时 zone.phase>=2（两条路径互斥，各自覆盖对方
  * 无法触发的极端玩法，见设计文档 3.1 节）。解锁时弹出一次性"入职大礼包"：从未装备的副武器里
@@ -4652,31 +5627,90 @@ function unlockSubSlot() {
     const def = SUBS[id];
     return { kind: 'sub', id, name: `入职大礼包：${def.name}`, eff: def.eff[0], tag: def.tag, w: 1 };
   });
-  G.pendingLevels = 1;
+  G.pendingLevels = Math.max(1, G.pendingLevels + 1);   // 原来直接 =1 会吞掉已排队的升级抽卡
   setState('levelup');
+}
+function buildPersonaIntroChoices(pl) {
+  const choices = [];
+  for (const row of PERSONA_STARTER_SKILLS) {
+    const s = SKILLS.find(x => x.id === row.skillId);
+    if (!s || (pl.skills[s.id] || 0) >= s.max || (s.valid && !s.valid(pl))) continue;
+    choices.push({
+      kind: 'skill', id: s.id, ref: s, max: s.max, w: 1,
+      personaIntro: true, persona: row.persona,
+      name: `人设方向：${personaLabel(row.persona)}`,
+      eff: `${s.name}：${s.eff}`,
+      tag: s.tag,
+    });
+  }
+  return choices.length >= 3 ? shuffle(choices) : [];
+}
+function pendingMilestoneLevel(pl) {
+  if (!pl.persona) return null;
+  const levels = TUNE.personaMilestoneLevels || [];
+  pl.milestones = pl.milestones || {};
+  return levels.find(lv => pl.level >= lv && !pl.milestones[lv]) || null;
+}
+function buildMilestoneChoices(pl) {
+  const milestoneLevel = pendingMilestoneLevel(pl);
+  if (!milestoneLevel) return [];
+  const tracks = MILESTONE_TRACKS[pl.persona] || [];
+  const tier = (TUNE.personaMilestoneLevels || []).indexOf(milestoneLevel) + 1;
+  if (!tracks.length || tier <= 0) return [];
+  return tracks.map(track => ({
+    kind: 'milestone',
+    id: track.id,
+    milestoneLevel,
+    tier,
+    persona: pl.persona,
+    name: `Lv.${milestoneLevel} 晋升：${track.name}`,
+    eff: track.eff(tier),
+    tag: track.tag,
+    apply: track.apply,
+    w: 1,
+  }));
+}
+function applyMilestoneChoice(pl, choice) {
+  pl.milestones = pl.milestones || {};
+  pl.milestones[choice.milestoneLevel] = choice.id;
+  const beforeMax = maxHp(pl);
+  choice.apply(pl, choice.tier);
+  const maxGain = Math.max(0, maxHp(pl) - beforeMax);
+  const heal = 16 + choice.tier * 8 + Math.floor(maxGain * .5);
+  const shield = 10 + choice.tier * 5;
+  pl.hp = Math.min(maxHp(pl), pl.hp + heal);
+  pl.shield = Math.max(pl.shield || 0, shield);
+  pl.shieldT = Math.max(pl.shieldT || 0, 8 + choice.tier * 2);
+  warn(`📈 人设晋升：${choice.name}，本次升级仍可继续选择普通奖励`);
+  addFloat(pl.x, pl.y - 34, `晋升：${choice.name.replace(/^Lv\.\d+ 晋升：/, '')}`, '#ffcf33', 10, 1.5);
+  SFX.fuse();
 }
 function buildDraftPool(pl) {
   const cards = [];
   /* v18: 玩家一旦选到第一张带 persona 的技能就锁定人设，此后同人设卡权重×2、异人设卡完全过滤，
    * 让紫橙质变技能的稀缺性不再被"抽到隔壁人设的卡"稀释。未选任何 persona 卡时对所有 persona 通吃 */
   const p = pl.persona;
+  /* 「先不站队」的那一次抽卡：过滤全部人设卡，出纯通用池——否则混合池里随手一张人设卡就把人设锁了，按钮形同虚设 */
+  const noPersonaThisDraft = !p && G.personaSnooze;
   for (const s of SKILLS) {
     if (p && s.persona && s.persona !== p) continue;
+    if (noPersonaThisDraft && s.persona) continue;
     if ((pl.skills[s.id] || 0) < s.max && (!s.valid || s.valid(pl)))
-      cards.push({ kind: 'skill', id: s.id, ref: s, name: s.name, eff: s.eff, tag: s.tag, max: s.max, w: (s.persona && s.persona === p) ? 2 : 1 });
+      cards.push({ kind: 'skill', id: s.id, ref: s, name: s.name, eff: s.eff, tag: s.tag, max: s.max, persona: s.persona || null, w: (s.persona && s.persona === p) ? 2 : 1 });
   }
   const ownedSubs = Object.keys(pl.subs);
   for (const id in SUBS) {
     const def = SUBS[id], cur = pl.subs[id];
     if (p && def.persona && def.persona !== p) continue;
+    if (noPersonaThisDraft && def.persona) continue;
     /* 决赛圈近战新卡打折（远程对枪环境近战难成型） */
     const meleeLate = ['keyboard', 'monitor', 'shredder'].includes(id) && G.zone.phase >= 2 ? .5 : 1;
     const personaBonus = (def.persona && def.persona === p) ? 2 : 1;
     if (cur) {
       if (cur.lv < def.maxLv)
-        cards.push({ kind: 'sub', id, name: `${def.name} Lv.${cur.lv + 1}`, eff: def.eff[cur.lv], tag: def.tag, w: 1.6 * personaBonus });
+        cards.push({ kind: 'sub', id, name: `${def.name} Lv.${cur.lv + 1}`, eff: def.eff[cur.lv], tag: def.tag, persona: def.persona || null, w: 1.6 * personaBonus });
     } else if (ownedSubs.length < (pl.subSlotCount || MAX_SUB_SLOTS)) {
-      cards.push({ kind: 'sub', id, name: `新装备：${def.name}`, eff: def.eff[0], tag: def.tag, w: .8 * meleeLate * personaBonus });
+      cards.push({ kind: 'sub', id, name: `新装备：${def.name}`, eff: def.eff[0], tag: def.tag, persona: def.persona || null, w: .8 * meleeLate * personaBonus });
     }
   }
   /* v2.0 双主动槽：Q/E 分开建池；已装备升级卡，未装备新装备卡 */
@@ -4685,23 +5719,39 @@ function buildDraftPool(pl) {
   for (const id in ACTIVES) {
     const def = ACTIVES[id];
     if (p && def.persona && def.persona !== p) continue;
+    if (noPersonaThisDraft && def.persona) continue;
     const personaBonus = (def.persona && def.persona === p) ? 2 : 1;
     const isE = def.slot === 'e';
     const cur = isE ? hasE : hasQ;
     if (cur && cur.id === id) {
       if (cur.lv < 3) {
         const label = isE ? 'E 键' : 'Q 键';
-        cards.push({ kind: 'active', id, name: `${def.name} Lv.${cur.lv + 1}（${label}）`, eff: def.eff[cur.lv], tag: def.tag, w: 1.3 });
+        cards.push({ kind: 'active', id, name: `${def.name} Lv.${cur.lv + 1}（${label}）`, eff: def.eff[cur.lv], tag: def.tag, persona: def.persona || null, w: 1.3 });
       }
     } else if (!cur) {
       const label = isE ? 'E 大招' : 'Q 战术';
-      cards.push({ kind: 'active', id, name: `${label}：${def.name}`, eff: def.eff[0], tag: def.tag, w: .7 * personaBonus });
+      cards.push({ kind: 'active', id, name: `${label}：${def.name}`, eff: def.eff[0], tag: def.tag, persona: def.persona || null, w: .7 * personaBonus });
     }
   }
   return cards;
 }
+function rareEligible(card, pl) {
+  return card.kind === 'skill' && !!card.ref && (pl.skills[card.id] || 0) + 1 < card.ref.max;
+}
 function openLevelup() {
   const pl = G.player;
+  const personaIntro = !pl.persona && !G.personaSnooze ? buildPersonaIntroChoices(pl) : [];
+  if (personaIntro.length >= 3) {
+    levelChoices = personaIntro;
+    setState('levelup');
+    return;
+  }
+  const milestoneChoices = buildMilestoneChoices(pl);
+  if (milestoneChoices.length) {
+    levelChoices = milestoneChoices;
+    setState('levelup');
+    return;
+  }
   const cards = buildDraftPool(pl);
   /* 加权无放回抽 3 张 */
   const picked = [];
@@ -4716,16 +5766,40 @@ function openLevelup() {
   const hasGear = picked.some(c => c.kind !== 'skill');
   if (!hasGear) {
     G.dryDrafts = (G.dryDrafts || 0) + 1;
-    if (G.dryDrafts >= 3) {
+    if (G.dryDrafts >= (TUNE.gearPityDrafts || 3)) {
       const gear = cards.filter(c => c.kind !== 'skill').sort((a, b) => b.w - a.w)[0];
-      if (gear && picked.length) { picked[picked.length - 1] = gear; G.dryDrafts = 0; }
+      if (gear && picked.length) { picked[picked.length - 1] = { ...gear, _pity: true }; G.dryDrafts = 0; }
     }
   } else G.dryDrafts = 0;
-  while (picked.length < 3) picked.push({ kind: 'skill', id: '_coffee' + picked.length, name: '茶水间补给', eff: '回复 40 HP',
+  /* 人设锁定后的核心手感：每次升级至少出现 1 张本流派牌，避免新增人设被通用卡池稀释。
+   * 只顶替通用技能卡；若没有可顶替的（比如末位是 pity 保底装备），宁可放弃本次保证也不吃掉 pity */
+  if (pl.persona && picked.length && !picked.some(c => c.persona === pl.persona)) {
+    const bestIdx = cards.reduce((best, c, i) => c.persona === pl.persona && (best < 0 || c.w > cards[best].w) ? i : best, -1);
+    if (bestIdx >= 0) {
+      let replaceIdx = picked.findIndex(c => !c.persona && c.kind === 'skill' && !c._pity);
+      if (replaceIdx < 0 && !picked[picked.length - 1]._pity) replaceIdx = picked.length - 1;
+      if (replaceIdx >= 0) picked[replaceIdx] = cards.splice(bestIdx, 1)[0];
+    }
+  }
+  while (picked.length < 3) picked.push({ kind: 'skill', id: '_coffee' + picked.length, name: '茶水间补给', eff: '回复 50 HP，获得 15 护盾',
     tag: '没什么可学的了，喝口咖啡接着卷。', ref: null, w: 1 });
-  /* 10% 概率金色「精修版」（仅普通技能卡） */
-  levelChoices = picked.map(c => ({ ...c, rare: c.kind === 'skill' && !!c.ref && Math.random() < .1 }));
+  /* 精修版只出现在有剩余层数、能真正双倍生效的技能上；关键等级保底提高一次质量感。 */
+  const rareIdxs = picked.map((c, i) => rareEligible(c, pl) ? i : -1).filter(i => i >= 0);
+  const milestoneEvery = TUNE.levelMilestoneRareEvery || 0;
+  let forcedRare = -1;
+  if (milestoneEvery && pl.level > 1 && pl.level % milestoneEvery === 0 && G.lastMilestoneRareLevel !== pl.level && rareIdxs.length) {
+    forcedRare = pick(rareIdxs);
+    G.lastMilestoneRareLevel = pl.level;
+  }
+  levelChoices = picked.map((c, i) => ({ ...c, rare: rareEligible(c, pl) && (i === forcedRare || Math.random() < (TUNE.levelRareChance ?? .1)) }));
   setState('levelup');
+}
+/* 人设 5 选 1 界面的「先不站队」：本次升级改看普通卡池，下次升级再问（下一次 pick 后复位） */
+export function snoozePersonaIntro() {
+  if (!G || state !== 'levelup') return;
+  G.personaSnooze = true;
+  openLevelup();
+  bridge.notify();
 }
 /* 简历刷新卡：三选一免费重抽 */
 export function rerollLevelup() {
@@ -4738,6 +5812,12 @@ export function pickLevelChoice(i) {
   const s = levelChoices[i];
   if (!s || state !== 'levelup') return;
   const pl = G.player;
+  if (s.kind === 'milestone') {
+    applyMilestoneChoice(pl, s);
+    if (G.pendingLevels > 0) openLevelup();
+    else setState('playing');
+    return;
+  }
   /* v18: 玩家选到第一张带 persona 的技能/副武器/主动时，锁定人设——此后卡池按人设过滤 */
   const personaOf = s.kind === 'skill' && s.ref ? s.ref.persona
     : s.kind === 'sub' ? SUBS[s.id].persona
@@ -4745,7 +5825,7 @@ export function pickLevelChoice(i) {
     : null;
   if (personaOf && !pl.persona) {
     pl.persona = personaOf;
-    const label = personaOf === 'optimizer' ? '首席降本增效官' : personaOf === 'slacker' ? '摸鱼表演艺术家' : personaOf;
+    const label = personaLabel(personaOf);
     warn(`🎭 人设锁定：${label}——之后的卡池只出同人设卡`);
     addFloat(pl.x, pl.y - 32, `人设：${label}`, '#ffcf33', 10, 1.6);
   }
@@ -4771,14 +5851,21 @@ export function pickLevelChoice(i) {
     const label = isE ? '按 E' : '按 Q';
     addFloat(pl.x, pl.y - 22, `主动技能：${def.name}（${label}）`, '#b665ff', 8, 1.2);
   } else if (s.ref) {
+    const before = pl.skills[s.id] || 0;
     applySkill(pl, s.ref);
-    if (s.rare && (pl.skills[s.id] || 0) < s.ref.max) {
+    if (s.rare && before + 1 < s.ref.max) {
       applySkill(pl, s.ref);
       addFloat(pl.x, pl.y - 24, '精修版：双倍生效！', '#c9a227', 9, 1.3);
       SFX.fuse();
     }
-  } else pl.hp = Math.min(maxHp(pl), pl.hp + 40);
+  } else {
+    pl.hp = Math.min(maxHp(pl), pl.hp + 50);
+    pl.shield = Math.max(pl.shield || 0, 15);
+    pl.shieldT = Math.max(pl.shieldT || 0, 8);
+    addFloat(pl.x, pl.y - 20, '茶水间补给：+50 HP +15 盾', '#7ee08a', 8, 1.1);
+  }
   G.pendingLevels--;
+  G.personaSnooze = false;   // 本次升级选完普通卡，下次升级重新提供人设抽卡
   SFX.pickup();
   checkEvolutions(pl);
   if (G.pendingLevels > 0) openLevelup();
@@ -4801,7 +5888,13 @@ function checkEvolutions(pl) {
     if (!hasPartner) continue;
     pl.evolved[e.id] = true;
     /* 每个觉醒的具体效果是专属 mods 标记位，运行时在对应技能/副武器/主动的逻辑里读取 */
-    if (e.id === 'evo_blame_furnace') pl.mods.blameReflectPct = .8;
+    if (e.id === 'evo_rlhf_nuke_dataset') { pl.mods.executionNukeEvery = 8; pl.mods.executeBlastChance += .25; }
+    else if (e.id === 'evo_rlhf_last_feedback') pl.mods.__evoLastFeedback = true;
+    else if (e.id === 'evo_revival_shift_change') pl.mods.__evoShiftChange = true;
+    else if (e.id === 'evo_revival_fubao_field') pl.mods.__evoFubaoField = true;
+    else if (e.id === 'evo_opc_outsource_empire') pl.mods.__evoOutsourceEmpire = true;
+    else if (e.id === 'evo_opc_layoff_wave') pl.mods.__evoLayoffWave = true;
+    else if (e.id === 'evo_blame_furnace') pl.mods.blameReflectPct = .8;
     else if (e.id === 'evo_dismissal_committee') pl.mods.__evoDismissalChain = true;
     else if (e.id === 'evo_online_offline') pl.mods.__evoOnlineOffline = true;
     else if (e.id === 'evo_pretend_not_seen') pl.mods.__evoFakeDiligenceUpgrade = true;
@@ -4821,10 +5914,12 @@ export function startGame() {
   try { months = parseInt(localStorage.getItem('niuma_trial') ?? '3', 10); } catch (e) { /* ignore */ }
   months = clamp(isNaN(months) ? 3 : months, 0, 6);
   G = newGame(months);
+  /* 免试用期开局直面 19 个持枪同事：给一段开局护盾缓冲（实测全托管 15 秒暴毙，落地成盒劝退） */
+  if (months === 0) { G.player.shield = 30; G.player.shieldT = 20; }
   setState('playing');
   warn(months > 0
     ? `HR：签到成功。试用期 ${months} 个月，期间同事互不伤害，先把琐事清了。`
-    : 'HR：签到成功，欢迎参加本季度大逃杀。');
+    : 'HR：签到成功，欢迎参加本季度大逃杀（新人保护盾 20 秒）。');
 }
 export function backToMenu() { setState('menu'); }
 export function togglePause() {
@@ -4848,6 +5943,8 @@ export function handleKey(code) {
     if (code === 'Digit1') pickLevelChoice(0);
     else if (code === 'Digit2') pickLevelChoice(1);
     else if (code === 'Digit3') pickLevelChoice(2);
+    else if (code === 'Digit4') pickLevelChoice(3);
+    else if (code === 'Digit5') pickLevelChoice(4);
   } else if (state === 'menu' || state === 'dead' || state === 'win') {
     if (code === 'Enter' && Date.now() - loadedAt > 500) startGame();
   }

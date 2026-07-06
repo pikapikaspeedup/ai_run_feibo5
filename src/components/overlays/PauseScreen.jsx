@@ -8,10 +8,11 @@ import { SUBS } from '../../game/data/subweapons.js';
 import { ACTIVES } from '../../game/data/actives.js';
 import { TECH, DISTILLS, CURSES } from '../../game/data/tech.js';
 import { EVOLUTIONS } from '../../game/data/evolutions.js';
+import { milestoneLabel } from '../../game/data/milestones.js';
 import * as bridge from '../../game/bridge.js';
 
 const RARITY_COLOR = { 白: '#f2efe6', 绿: '#7ee08a', 蓝: '#7ac8ff', 紫: '#b665ff', 橙: '#ff9440' };
-const PERSONA_NAMES = { optimizer: '首席降本增效官', slacker: '摸鱼表演艺术家' };
+const PERSONA_NAMES = { optimizer: '首席降本增效官', slacker: '摸鱼表演艺术家', rlhf: '人肉 RLHF 训练员', revival: '万年活人矿·二次入职', opc: '一人公司 OPC' };
 
 function skillById(id) { return SKILLS.find(s => s.id === id); }
 
@@ -55,6 +56,9 @@ export default function PauseScreen() {
     .filter(([, t]) => t > 0)
     .map(([id, t]) => ({ id, t, def: CURSES[id] }));
   const evolutionList = Object.keys(pl.evolved || {}).map(id => EVOLUTIONS.find(e => e.id === id)).filter(Boolean);
+  const milestoneList = Object.entries(pl.milestones || {})
+    .map(([level, id]) => ({ level: Number(level), id, name: milestoneLabel(id) }))
+    .sort((a, b) => a.level - b.level);
   const activeProcs = (() => {
     const p = pl.mods && pl.mods.procs;
     if (!p) return { onHit: 0, onCrit: 0, onKill: 0, onHurt: 0 };
@@ -141,6 +145,16 @@ export default function PauseScreen() {
                 {evolutionList.map(e => (
                   <div className="pause-item" key={e.id}>
                     <span className="pause-name" style={{ color: '#ffcf33' }}>✨ {e.name}</span>
+                  </div>
+                ))}
+              </PanelSection>
+            )}
+
+            {milestoneList.length > 0 && (
+              <PanelSection title="晋升里程碑" count={milestoneList.length}>
+                {milestoneList.map(m => (
+                  <div className="pause-item" key={`${m.level}-${m.id}`}>
+                    <span className="pause-name" style={{ color: '#ffcf33' }}>Lv.{m.level} {m.name}</span>
                   </div>
                 ))}
               </PanelSection>

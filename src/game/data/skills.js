@@ -49,6 +49,90 @@ export const SKILLS = [
     tag: '光是站在旁边都会掉血。', apply: m => m.auraDmg += 2 },
 
   /* ===================================================================
+   * 人设一：人肉 RLHF 训练员（处决爆发流）——每一次标注，都是训练替代你的模型
+   * =================================================================== */
+  { id: 'rlhf_emotional_kpi', name: '情绪化KPI', max: 4, rarity: '白', persona: 'rlhf',
+    eff: '暴击率 +6%/层，但基础伤害略降',
+    tag: '反馈越情绪化，模型越知道该往哪边卷。', apply: m => { m.crit += .06; m.dmg *= .97; } },
+  { id: 'rlhf_piecework_labeling', name: '流水线标注', max: 4, rarity: '白', persona: 'rlhf',
+    eff: '处决阈值 +4%/层（普通敌人低血直接优化）',
+    tag: '一条一条标，标到它没有活路。', apply: m => m.executeThreshold += .04 },
+  { id: 'rlhf_break_pot', name: '破罐破摔', max: 3, rarity: '绿', persona: 'rlhf',
+    eff: '生命越低，对低血目标伤害越高',
+    tag: '都快被优化了，标注还要准时交。', apply: m => m.lowHpExecuteDmg += .18 },
+  { id: 'rlhf_third_review', name: '三审不过', max: 1, rarity: '蓝', persona: 'rlhf',
+    eff: '同一目标第3次命中会被复审，低血时直接处决',
+    tag: '一审说不准，二审说不稳，三审直接打回重训。', apply: m => m.thirdHitExecute = true },
+  { id: 'rlhf_legacy_chain', name: '遗产继承', max: 3, rarity: '蓝', persona: 'rlhf',
+    eff: '处决击杀 25%/层概率原地爆炸',
+    tag: '前一个被优化的人，给后一个留下了训练样本。', apply: m => m.executeBlastChance += .25 },
+  { id: 'rlhf_all_in', name: '全梭哈', max: 1, rarity: '紫', persona: 'rlhf',
+    eff: '质变：常规暴击变少，20% 概率打出终极暴击',
+    tag: '要么错得离谱，要么一发入魂。', apply: m => m.terminalCrit = true },
+  { id: 'rlhf_nuke_button', name: '核按钮授权', max: 1, rarity: '紫', persona: 'rlhf',
+    eff: '质变：连续处决攒满后触发范围核爆',
+    tag: '训练集够了，现在可以一键优化。', apply: m => m.executionNuke = true },
+  { id: 'rlhf_last_words', name: '临终遗言', max: 1, rarity: '橙', persona: 'rlhf',
+    eff: '大招：首次濒死触发 6 秒无敌、射速与伤害爆发',
+    tag: '最后一条反馈，往往最有价值。', apply: m => m.lastWords = true },
+
+  /* ===================================================================
+   * 人设二：万年活人矿·二次入职（耐久反打流）——伤害不是失败，是资源
+   * =================================================================== */
+  { id: 'revival_grind_body', name: '耗造体质', max: 4, rarity: '白', persona: 'revival',
+    eff: '最大生命 +18/层',
+    tag: '人可以被优化，但工位不能空着。', apply: m => m.maxHpAdd += 18 },
+  { id: 'revival_paid_tank', name: '带薪硬扛', max: 3, rarity: '绿', persona: 'revival',
+    eff: '单次重击额外减伤 12%/层',
+    tag: '被打也是在岗时长。', apply: m => m.heavyHitReduce += .12 },
+  { id: 'revival_stress_response', name: '应激反应', max: 3, rarity: '绿', persona: 'revival',
+    eff: '生命低于 50% 时受伤 -8%/层，低于 25% 加倍',
+    tag: '血条越短，求生欲越长。', apply: m => m.lowHpResist += .08 },
+  { id: 'revival_scar_badge', name: '伤疤是勋章', max: 3, rarity: '蓝', persona: 'revival',
+    eff: '实际掉血会叠硬气，短时间提升伤害',
+    tag: '每一道伤口，都是绩效证明。', apply: m => m.scarBadge += 1 },
+  { id: 'revival_fubao_absorb', name: '福报吸收', max: 3, rarity: '蓝', persona: 'revival',
+    eff: '实际掉血的一部分转为短暂护盾',
+    tag: '伤害先进待办，晚点再说。', apply: m => m.damageToShield += .12 },
+  { id: 'revival_second_entry', name: '二次入职', max: 1, rarity: '蓝', persona: 'revival',
+    eff: '首次生命归零时返聘复活，扣少量经验',
+    tag: '工龄清零，工资打折，但人又回来了。', apply: m => m.secondEntry = true },
+  { id: 'revival_blood_debt', name: '越死越勇', max: 1, rarity: '紫', persona: 'revival',
+    eff: '质变：低血进入背水，积累承伤后脱离低血引爆',
+    tag: '欠下的血债，总有人要还。', apply: m => m.backwater = true },
+  { id: 'revival_996_protocol', name: '996核爆协议', max: 1, rarity: '橙', persona: 'revival',
+    eff: '大招：累计承伤满额后免疫、回血并范围反爆',
+    tag: '扛到系统都看不下去，就该结算加班费了。', apply: m => m.overworkNuke = true },
+
+  /* ===================================================================
+   * 人设三：一人公司 OPC（召唤后勤流）——被裁到只剩自己，只能用 AI 分身撑起部门
+   * =================================================================== */
+  { id: 'opc_contract_worker', name: '外包合同工', max: 4, rarity: '白', persona: 'opc',
+    eff: '周期召唤临时工幻影，同屏上限 +1/层',
+    tag: '公司只剩你一个人，但群里还有一整排头像。', apply: m => m.contractorSummon += 1 },
+  { id: 'opc_kpi_outsource', name: 'KPI外包', max: 3, rarity: '白', persona: 'opc',
+    eff: '所有 OPC 召唤物伤害 +18%/层',
+    tag: 'KPI 可以不是我干的，但必须算我的。', apply: m => m.summonDmg += .18 },
+  { id: 'opc_cloud_standby', name: '云端待命', max: 3, rarity: '绿', persona: 'opc',
+    eff: 'OPC 召唤冷却 -10%/层，召唤物在场时本体提速',
+    tag: '人不在工位，服务一直在线。', apply: m => m.summonCdMul *= .9 },
+  { id: 'opc_blame_protocol', name: '甩锅协议', max: 3, rarity: '绿', persona: 'opc',
+    eff: '受伤 12%/层概率转嫁给一个 OPC 召唤物',
+    tag: '这锅我可以背，但我的分身先签收。', apply: m => m.damageToSummon += .12 },
+  { id: 'opc_workstation_cache', name: '影子考勤', max: 1, rarity: '蓝', persona: 'opc',
+    eff: '召唤物正常到期会留下工位，下一个临时工继承强化',
+    tag: '人走了，电脑还亮着。', apply: m => m.workstationCache = true },
+  { id: 'opc_headhunter', name: '猎头挖角', max: 1, rarity: '蓝', persona: 'opc',
+    eff: '每累计击杀一批敌人，提拔一个召唤物为资深员工',
+    tag: '优秀外包转正，工资不涨，强度翻倍。', apply: m => m.headhunter = true },
+  { id: 'opc_matrix', name: '背锅侠矩阵', max: 1, rarity: '紫', persona: 'opc',
+    eff: '质变：召唤物≥6时激活矩阵，本体闪避并集火易伤目标',
+    tag: '部门不存在了，但组织架构图还在自动运转。', apply: m => m.contractorMatrix = true },
+  { id: 'opc_retirement_nuke', name: '退休金核爆', max: 1, rarity: '橙', persona: 'opc',
+    eff: '大招：召唤物正常到期攒工龄，满额触发遣散费冲击波',
+    tag: '每一个准时下班的分身，都在替你攒遣散费。', apply: m => m.severanceNuke = true },
+
+  /* ===================================================================
    * 人设四：首席降本增效官（控场反噬流）——本来是老板对你做的事，现在你对同事做
    * =================================================================== */
   { id: 'office_politics', name: '办公室政治', max: 5, rarity: '白', persona: 'optimizer',
@@ -67,7 +151,7 @@ export const SKILLS = [
     eff: '场上每个受控敌人给你一层KPI压力（上限20层，每层+2%全属性伤害，每秒重算一次）',
     tag: '人越多，锅越大，我的奖金也越大。', apply: m => m.kpiPerLayer += .02 },
   { id: 'circuit_breaker', name: '熔断机制', max: 1, rarity: '蓝', persona: 'optimizer',
-    eff: '独特机制：单次受伤超当前生命15%时触发熔断——全屏眩晕1.2秒+自身免疫0.6秒，20秒冷却',
+    eff: '独特机制：单次受伤超当前生命15%时触发熔断——大范围眩晕1.2秒+自身免疫0.6秒，20秒冷却',
     tag: '系统检测到异常负载，自动熔断保护——顺便把你们都锁死。', apply: m => m.fuseBreak = true },
   { id: 'blame_reflect', name: '甩锅式反伤', max: 1, rarity: '紫', persona: 'optimizer',
     eff: '质变：受到的伤害40%概率完全转移给3格内受控敌人（按150%结算）',
@@ -103,7 +187,7 @@ export const SKILLS = [
     eff: '质变：不受伤满8秒触发一次全屏伤害清算（=当前武器伤害×3），随后重置',
     tag: '假装很努力，其实在等下班。', apply: m => m.fakeDiligence = true },
   { id: 'perpetual_slack', name: '永动摸鱼引擎', max: 1, rarity: '橙', persona: 'slacker',
-    eff: '大招：累计移动300px（每秒有上限，防瞬移刷值）触发4秒"高铁摸鱼"——海量提速+免疫接触伤害+沿途弹射伤害',
+    eff: '大招：累计移动800px 触发2秒"高铁摸鱼"——海量提速+无敌+沿途弹射伤害，10秒冷却',
     tag: '我全程没跟你正面打一下，但你们全死了。', apply: m => m.perpetualSlack = true },
 
   /* ===================================================================

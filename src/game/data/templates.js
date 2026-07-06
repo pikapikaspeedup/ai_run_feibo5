@@ -22,7 +22,7 @@ const CUBICLES_A = {   // 2×2 工位岛（桌+椅成对），右上一盆绿植
   decor: [
     { spr: 'chair', dx: 140, dy: 180 }, { spr: 'chair', dx: 260, dy: 180 },
     { spr: 'chair', dx: 140, dy: 320 }, { spr: 'chair', dx: 260, dy: 320 },
-    { spr: 'plant', dx: 340, dy: 120 },
+    { spr: 'plant', dx: 340, dy: 120 }, { spr: 'coffee_machine', dx: 40, dy: 300 },
   ],
   walls: NO_WALLS,
 };
@@ -34,7 +34,7 @@ const CUBICLES_B = {   // 一横排 3 工位，右侧垃圾桶收尾
   decor: [
     { spr: 'chair', dx: 100, dy: 220 }, { spr: 'chair', dx: 220, dy: 220 },
     { spr: 'chair', dx: 340, dy: 220 },
-    { spr: 'trash', dx: 40,  dy: 160 },
+    { spr: 'trash', dx: 40,  dy: 160 }, { spr: 'coffee_machine', dx: 40, dy: 240 },
   ],
   walls: NO_WALLS,
 };
@@ -47,6 +47,7 @@ const CUBICLES_C = {   // 竖排 2×2 紧凑岛 + 白板（组内公告）
   decor: [
     { spr: 'chair', dx: 160, dy: 160 }, { spr: 'chair', dx: 280, dy: 160 },
     { spr: 'chair', dx: 160, dy: 300 }, { spr: 'chair', dx: 280, dy: 300 },
+    { spr: 'coffee_machine', dx: 60, dy: 240 },
   ],
   walls: NO_WALLS,
 };
@@ -61,6 +62,7 @@ const MEETING_A = {   // 横向长桌（两桌拼合）+ 6 椅围坐 + 白板在
     { spr: 'chair', dx: 150, dy: 140 }, { spr: 'chair', dx: 220, dy: 140 },
     { spr: 'chair', dx: 150, dy: 240 }, { spr: 'chair', dx: 220, dy: 240 },
     { spr: 'chair', dx: 90,  dy: 190 }, { spr: 'chair', dx: 290, dy: 190 },
+    { spr: 'coffee_machine', dx: 320, dy: 260 },
   ],
   walls: NO_WALLS,
 };
@@ -72,6 +74,7 @@ const MEETING_B = {   // 竖向长桌 + PPT 展板 + 座机（打断汇报的道
   decor: [
     { spr: 'chair', dx: 140, dy: 150 }, { spr: 'chair', dx: 260, dy: 150 },
     { spr: 'chair', dx: 140, dy: 210 }, { spr: 'chair', dx: 260, dy: 210 },
+    { spr: 'coffee_machine', dx: 320, dy: 260 },
   ],
   walls: NO_WALLS,
 };
@@ -82,6 +85,7 @@ const MEETING_C = {   // 剧场式：白板讲台 + 两排听众椅（全员大�
   decor: [
     { spr: 'chair', dx: 140, dy: 180 }, { spr: 'chair', dx: 200, dy: 180 }, { spr: 'chair', dx: 260, dy: 180 },
     { spr: 'chair', dx: 140, dy: 240 }, { spr: 'chair', dx: 200, dy: 240 }, { spr: 'chair', dx: 260, dy: 240 },
+    { spr: 'coffee_machine', dx: 80, dy: 240 },
   ],
   walls: NO_WALLS,
 };
@@ -128,6 +132,7 @@ const PRINT_A = {   // 双打印机 + 两侧文件柜对称
   ],
   decor: [
     { spr: 'trash', dx: 160, dy: 220 }, { spr: 'trash', dx: 220, dy: 220 },
+    { spr: 'coffee_machine', dx: 320, dy: 220 },
   ],
   walls: NO_WALLS,
 };
@@ -138,7 +143,7 @@ const PRINT_B = {   // 打印机一横排 3 台，下方文件柜对
     { spr: 'cabinet', dx: 160, dy: 232 }, { spr: 'cabinet', dx: 240, dy: 232 },
   ],
   decor: [
-    { spr: 'trash', dx: 100, dy: 140 },
+    { spr: 'trash', dx: 100, dy: 140 }, { spr: 'coffee_machine', dx: 320, dy: 220 },
   ],
   walls: NO_WALLS,
 };
@@ -149,7 +154,7 @@ const PRINT_C = {   // 档案区：文件柜排 + 双打印机
     { spr: 'printer', dx: 150, dy: 240 }, { spr: 'printer', dx: 210, dy: 240 },
   ],
   decor: [
-    { spr: 'trash', dx: 300, dy: 140 },
+    { spr: 'trash', dx: 300, dy: 140 }, { spr: 'coffee_machine', dx: 300, dy: 240 },
   ],
   walls: NO_WALLS,
 };
@@ -163,6 +168,7 @@ const BOSS_A = {
   decor: [
     { spr: 'chair', dx: 190, dy: 140 }, { spr: 'sofa', dx: 100, dy: 280 },
     { spr: 'plant', dx: 80, dy: 80 }, { spr: 'plant', dx: 280, dy: 80 },
+    { spr: 'coffee_machine', dx: 300, dy: 260 },
   ],
   walls: NO_WALLS,
   safe: { dx: 260, dy: 172 },   // 保险柜贴着班台右侧
@@ -174,6 +180,7 @@ const BOSS_B = {
   decor: [
     { spr: 'chair', dx: 190, dy: 160 }, { spr: 'sofa', dx: 260, dy: 300 },
     { spr: 'coat_rack', dx: 280, dy: 100 }, { spr: 'plant', dx: 60, dy: 300 },
+    { spr: 'coffee_machine', dx: 60, dy: 220 },
   ],
   walls: NO_WALLS,
   safe: { dx: 180, dy: 100 },   // 保险柜藏书架旁
@@ -186,6 +193,7 @@ const BOSS_C = {
   decor: [
     { spr: 'chair', dx: 190, dy: 100 }, { spr: 'sofa', dx: 120, dy: 260 },
     { spr: 'plant', dx: 80, dy: 140 }, { spr: 'drinks', dx: 240, dy: 260 },
+    { spr: 'coffee_machine', dx: 300, dy: 260 },
   ],
   walls: NO_WALLS,
   safe: { dx: 200, dy: 252 },
@@ -198,7 +206,7 @@ const CORRIDOR_A = {
     { spr: 'bulletin_board', dx: 300, dy: 80 },
   ],
   decor: [
-    { spr: 'plant', dx: 200, dy: 300 },
+    { spr: 'plant', dx: 200, dy: 300 }, { spr: 'coffee_machine', dx: 300, dy: 260 },
   ],
   walls: NO_WALLS,
 };
@@ -208,6 +216,7 @@ const CORRIDOR_B = {
   ],
   decor: [
     { spr: 'plant', dx: 100, dy: 120 }, { spr: 'plant', dx: 100, dy: 280 },
+    { spr: 'coffee_machine', dx: 260, dy: 220 },
   ],
   walls: NO_WALLS,
 };
@@ -218,6 +227,7 @@ const CORRIDOR_C = {
   ],
   decor: [
     { spr: 'plant', dx: 80, dy: 200 }, { spr: 'plant', dx: 320, dy: 200 },
+    { spr: 'coffee_machine', dx: 320, dy: 300 },
   ],
   walls: NO_WALLS,
 };

@@ -55,7 +55,8 @@ export default function StartScreen() {
             <div className="kbd-row">
               <span><kbd>WASD</kbd> 移动</span><span><kbd>鼠标</kbd> 瞄准 / 按住开火</span>
               <span><kbd>T</kbd> 自动开火/全托管（触控板党救星）</span>
-              <span><kbd>E</kbd> 换武器</span><span><kbd>F</kbd> 融合</span>
+              <span><kbd>Q</kbd> 战术技能</span>
+              <span><kbd>E</kbd> 大招（悬停芯片时=换武器）</span><span><kbd>F</kbd> 融合</span>
               <span><kbd>Shift</kbd> 冲刺（需技能）</span><span><kbd>ESC</kbd> 暂停</span>
             </div>
           )}
@@ -113,14 +114,14 @@ export default function StartScreen() {
                   <span className="d-pat">{t.desc} —— {t.tag}</span>
                 </div>
               ))}
-              <div className="dex-sec">— 副武器·办公室兵器（升级抽蓝卡，最多 3 件，自动索敌）—</div>
+              <div className="dex-sec">— 副武器·办公室兵器（升级抽蓝卡，初始 3 件，转正/缩圈后 4 件，自动索敌）—</div>
               {Object.values(SUBS).map(s => (
                 <div className="dex-row" key={s.name}>
                   <span className="d-name" style={{ color: '#2c6cd8' }}>{s.name}</span>
                   <span className="d-pat">{s.eff[0]} —— {s.tag}</span>
                 </div>
               ))}
-              <div className="dex-sec">— 主动技能（升级抽紫卡，Q 键释放，仅 1 槽）—</div>
+              <div className="dex-sec">— 主动技能（升级抽紫卡，Q 战术 + E 大招双槽）—</div>
               {Object.values(ACTIVES).map(a => (
                 <div className="dex-row" key={a.name}>
                   <span className="d-name" style={{ color: '#8a3fd0' }}>{a.name}</span>

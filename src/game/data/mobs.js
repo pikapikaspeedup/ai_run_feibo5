@@ -60,6 +60,33 @@ export const MOBS = {
   deadline_alarm: { name: '死线警报', hp: 16, spd: 0, touch: 0, xp: 4, jig: false,
     spr: 'mob_deadline', alarmCd: 5, alarmDelay: 1, alarmR: 55, alarmDmg: 12 },
 
+  /* =====================================================================
+   * v2.2 新增行为品类 · 7 种（自爆/冲锋/召唤/拖尾坦克/牵引/偷窃/易伤射手）
+   * 行为实现见 core.js updateMob 对应分支
+   * ===================================================================== */
+  /* KPI 气球：加速贴脸，近身点燃引信后自爆（有预警圈）；不接触伤害，全部威胁在爆炸 */
+  kpi_balloon: { name: 'KPI 气球', hp: 10, spd: 118, touch: 0, xp: 3, jig: false, spr: 'mob_balloon',
+    kamikaze: { r: 46, dmg: 16, fuse: .55 } },
+  /* 狼性文化训练生：中距离蓄力（红线预警）后高速突进，撞上挨大口；平时走普通追击 */
+  wolf_culture: { name: '狼性文化训练生', hp: 26, spd: 78, touch: 4, xp: 4, jig: false, spr: 'mob_wolf',
+    charger: { windup: .55, dashSpd: 300, dashT: .45, cd: 2.4 } },
+  /* HR 实习生：站得远远的周期呼叫邮件支援（召唤物不计入波次目标） */
+  hr_intern: { name: 'HR 实习生', hp: 30, spd: 55, touch: 2, xp: 5, jig: false, spr: 'mob_hrintern',
+    summon: { type: 'email', count: 2, cd: 6, cap: 6 } },
+  /* 加班蜗牛：厚血慢速坦克，身后拖减速粘液带，逼玩家绕路 */
+  overtime_snail: { name: '加班蜗牛', hp: 55, spd: 34, touch: 5, xp: 6, jig: false, spr: 'mob_snail',
+    slowTrail: { r: 26, slow: .35, life: 2.2, drop: .5 } },
+  /* 全员会议黑洞：缓慢逼近，把范围内的玩家往自己身上吸（位移压力型） */
+  meeting_blackhole: { name: '全员会议黑洞', hp: 34, spd: 22, touch: 3, xp: 6, jig: false, spr: 'mob_blackhole',
+    pullR: 130, pullPow: 44 },
+  /* 工资小偷：满场偷吃经验豆，杀掉吐 1.5 倍——不打它就亏，纯机会成本怪 */
+  salary_thief: { name: '工资小偷', hp: 18, spd: 150, touch: 1.5, xp: 2, jig: true, spr: 'mob_thief',
+    thief: true },
+  /* PUA 大师：保距嘴炮，"画的饼"命中挂易伤（吃了这张饼你更疼） */
+  pua_master: { name: 'PUA 大师', hp: 22, spd: 80, touch: 2, xp: 5, jig: false, spr: 'mob_pua',
+    keepDist: 210, keepDistTol: 40, fireCd: 3.2, fireBulletDmg: 2, fireBulletSpd: 150,
+    fireBulletRange: 300, fireTriggerR: 300, fireBulletVuln: { t: 2.5, bonus: .2 } },
+
   /* v2.0 公共事故：正式大逃杀阶段周期出现；处理成功给 KPI，失败涨锅值 */
   incident_outage: { name: '线上故障公告牌', hp: 86, spd: 0, touch: 0, xp: 14, jig: false, spr: 'mob_deadline',
     publicIncident: '线上故障', incidentLife: 24, incidentSpawn: 'message_recall', incidentSpawnCd: 4, potFail: 18, kpiReward: 24 },
@@ -105,36 +132,42 @@ export function subWaves(month) {
    * v2.1 割草化：数量按"同屏 30-60 只"标定（原 7-14 只/波太空，无割草感）
    *   波内递增（w1<w2<w3），跨月递增；主力永远是低血 email 系，机制怪做点缀不做主食 */
   if (month <= 1) return [
-    /* 月 1 · 24/30/38 */
-    [{ type: 'email', count: 18 }, { type: 'cc_bomb', count: 6 }],
-    [{ type: 'email', count: 14 }, { type: 'reinvent_wheel', count: 6 }, { type: 'cc_bomb', count: 10 }],
-    [{ type: 'email', count: 18 }, { type: 'phishing_mail', count: 8 }, { type: 'cc_bomb', count: 12 }],
+    /* 月 1 · 16/21/26（原 24/30/38：实测第 1 波就淹死全托管/新手，玩家死在所有成长内容之前）*/
+    [{ type: 'email', count: 12 }, { type: 'cc_bomb', count: 4 }],
+    [{ type: 'email', count: 10 }, { type: 'reinvent_wheel', count: 4 }, { type: 'cc_bomb', count: 7 }],
+    [{ type: 'email', count: 12 }, { type: 'phishing_mail', count: 3 }, { type: 'cc_bomb', count: 8 }],
   ];
   if (month === 2) return [
-    /* 30/38/46 */
-    [{ type: 'email', count: 22 }, { type: 'sticky', count: 8 }],
-    [{ type: 'email', count: 14 }, { type: 'cc_bomb', count: 16 }, { type: 'meeting_invite', count: 8 }],
-    [{ type: 'email', count: 18 }, { type: 'message_recall', count: 12 }, { type: 'phishing_mail', count: 10 }, { type: 'sticky', count: 6 }],
+    /* 26/34/42（原 30/38/46，微降平滑难度曲线）；v2.2 引入冲锋/自爆两种新行为 */
+    [{ type: 'email', count: 19 }, { type: 'sticky', count: 7 }],
+    [{ type: 'email', count: 12 }, { type: 'cc_bomb', count: 10 }, { type: 'wolf_culture', count: 4 }, { type: 'meeting_invite', count: 8 }],
+    [{ type: 'email', count: 16 }, { type: 'message_recall', count: 11 }, { type: 'phishing_mail', count: 9 }, { type: 'kpi_balloon', count: 6 }],
   ];
   if (month === 3) return [
-    /* 44/48/56 */
-    [{ type: 'email', count: 24 }, { type: 'sticky', count: 10 }, { type: 'cc_bomb', count: 10 }],
-    [{ type: 'email', count: 20 }, { type: 'meeting_invite', count: 10 }, { type: 'message_recall', count: 12 }, { type: 'urgent_meeting', count: 6 }],
-    [{ type: 'email', count: 16 }, { type: 'phishing_mail', count: 12 }, { type: 'cc_bomb', count: 16 }, { type: 'outsourced_army', count: 2 }],
+    /* 44/48/56；v2.2 引入召唤/牵引/偷窃 */
+    [{ type: 'email', count: 22 }, { type: 'sticky', count: 10 }, { type: 'cc_bomb', count: 10 }, { type: 'hr_intern', count: 2 }],
+    [{ type: 'email', count: 18 }, { type: 'meeting_invite', count: 10 }, { type: 'message_recall', count: 12 }, { type: 'meeting_blackhole', count: 2 }, { type: 'urgent_meeting', count: 6 }],
+    [{ type: 'email', count: 14 }, { type: 'phishing_mail', count: 10 }, { type: 'cc_bomb', count: 12 }, { type: 'wolf_culture', count: 6 }, { type: 'salary_thief', count: 2 }, { type: 'outsourced_army', count: 2 }],
   ];
   if (month === 4) return [
-    /* 50/56/62 */
-    [{ type: 'email', count: 26 }, { type: 'cr', count: 12 }, { type: 'sticky', count: 12 }],
-    [{ type: 'email', count: 18 }, { type: 'cc_bomb', count: 18 }, { type: 'meeting_invite', count: 12 }, { type: 'urgent_meeting', count: 8 }],
-    [{ type: 'email', count: 22 }, { type: 'outsourced_army', count: 3 }, { type: 'overtime_rework', count: 10 }, { type: 'phishing_mail', count: 12 }],
+    /* 50/56/62；v2.2 引入拖尾坦克/易伤射手/站桩死线警报 */
+    [{ type: 'email', count: 24 }, { type: 'cr', count: 12 }, { type: 'sticky', count: 10 }, { type: 'overtime_snail', count: 3 }, { type: 'deadline_alarm', count: 2 }],
+    [{ type: 'email', count: 16 }, { type: 'cc_bomb', count: 14 }, { type: 'meeting_invite', count: 10 }, { type: 'pua_master', count: 4 }, { type: 'kpi_balloon', count: 8 }, { type: 'urgent_meeting', count: 4 }],
+    [{ type: 'email', count: 20 }, { type: 'outsourced_army', count: 3 }, { type: 'overtime_rework', count: 10 }, { type: 'phishing_mail', count: 8 }, { type: 'wolf_culture', count: 6 }, { type: 'hr_intern', count: 2 }],
   ];
-  /* 月 5+ · 60/68/80 全料 */
+  /* 月 5+ · 60/68/80 全料（v2.2 全行为品类混编 + 需求评审会据点） */
   return [
-    [{ type: 'email', count: 30 }, { type: 'cr', count: 14 }, { type: 'cc_bomb', count: 16 }],
-    [{ type: 'email', count: 26 }, { type: 'meeting_invite', count: 14 }, { type: 'urgent_meeting', count: 10 }, { type: 'outsourced_army', count: 3 }],
-    [{ type: 'email', count: 30 }, { type: 'overtime_rework', count: 14 }, { type: 'read_no_reply_ultimate', count: 6 }, { type: 'phishing_mail', count: 14 }, { type: 'cc_bomb', count: 16 }],
+    [{ type: 'email', count: 24 }, { type: 'cr', count: 12 }, { type: 'cc_bomb', count: 12 }, { type: 'kpi_balloon', count: 8 }, { type: 'salary_thief', count: 3 }, { type: 'req_review_board', count: 2 }],
+    [{ type: 'email', count: 20 }, { type: 'meeting_invite', count: 12 }, { type: 'urgent_meeting', count: 8 }, { type: 'wolf_culture', count: 8 }, { type: 'overtime_snail', count: 4 }, { type: 'meeting_blackhole', count: 3 }, { type: 'outsourced_army', count: 3 }],
+    [{ type: 'email', count: 22 }, { type: 'overtime_rework', count: 12 }, { type: 'read_no_reply_ultimate', count: 6 }, { type: 'phishing_mail', count: 10 }, { type: 'pua_master', count: 6 }, { type: 'hr_intern', count: 3 }, { type: 'deadline_alarm', count: 3 }, { type: 'cc_bomb', count: 12 }],
   ];
 }
+
+/* v2.2 正式大逃杀"琐事骚扰潮"抽取池：转正后低频小撮刷新，维持割草密度与行为多样性 */
+export const BR_MOB_POOL = [
+  'email', 'cc_bomb', 'kpi_balloon', 'wolf_culture', 'salary_thief',
+  'pua_master', 'overtime_snail', 'meeting_blackhole', 'phishing_mail', 'deadline_alarm',
+];
 
 export function waveComp(month) {
   const burst = 12 + 5 * (month - 1);        // 月初爆发波

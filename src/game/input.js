@@ -40,7 +40,9 @@ export function attachInput(canvas, stageEl) {
   addEventListener('blur', () => { keys.clear(); mouse.down = false; });
 
   addEventListener('mousemove', e => {
-    touch.using = false;
+    /* 触屏 tap 后浏览器会补发合成 mousemove（movementX/Y 恒为 0），
+     * 无条件切回键鼠模式会导致触控按钮消失、自动瞄准中断——只有真实移动才切换 */
+    if (e.movementX !== 0 || e.movementY !== 0) touch.using = false;
     const r = canvas.getBoundingClientRect();
     mouse.x = clamp((e.clientX - r.left) / r.width * VIEW_W, 0, VIEW_W);
     mouse.y = clamp((e.clientY - r.top) / r.height * VIEW_H, 0, VIEW_H);

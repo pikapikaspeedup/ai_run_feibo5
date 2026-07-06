@@ -8,7 +8,7 @@ export const GRID_N = 6;                  // 6×6 = 36 chunks · 严格对齐 de
 
 /* Chunk 类型定义：每种给不同的 fill 策略 */
 export const CHUNK_TYPES = {
-  cubicles: { color: '#4a3a2a', label: '工位森林',
+  cubicles: { color: '#4a3a2a', label: '工位岛',
     /* 大量桌子成阵，中等 T2/T3 装饰 */
     obstacles: [{ spr: 'desk', count: 4, spacing: 100 }],
     decor: [
@@ -18,7 +18,7 @@ export const CHUNK_TYPES = {
     ],
     decorCount: 5, phaseClose: 4 },
 
-  meeting: { color: '#2a4a6a', label: '会议室',
+  meeting: { color: '#2a4a6a', label: '会议岛',
     /* 中央一张大桌（用 desk*2 表示）+ 白板 + 椅子围一圈 */
     obstacles: [
       { spr: 'desk', count: 2, spacing: 80 },
@@ -29,7 +29,7 @@ export const CHUNK_TYPES = {
     ],
     decorCount: 8, phaseClose: 3 },
 
-  break: { color: '#3a6a3a', label: '茶水间',
+  break: { color: '#3a6a3a', label: '茶水补给点',
     /* 咖啡机 / 微波炉 / 饮水机 / 水瓶 heal 集中 */
     obstacles: [
       { spr: 'microwave', count: 1 },
@@ -40,7 +40,7 @@ export const CHUNK_TYPES = {
     ],
     decorCount: 6, phaseClose: 1 },
 
-  print: { color: '#6a4a2a', label: '打印复印室',
+  print: { color: '#6a4a2a', label: '打印角',
     /* 打印机密集 + 文件柜富矿 + 稀疏椅子 */
     obstacles: [
       { spr: 'printer', count: 3, spacing: 80 },
@@ -52,7 +52,7 @@ export const CHUNK_TYPES = {
     ],
     decorCount: 4, phaseClose: 2 },
 
-  boss: { color: '#7a5a1a', label: '老板办公室',
+  boss: { color: '#7a5a1a', label: '老板区',
     /* 大办公桌 + 沙发 + 高级家具 + 保险柜 */
     obstacles: [
       { spr: 'desk', count: 1 },

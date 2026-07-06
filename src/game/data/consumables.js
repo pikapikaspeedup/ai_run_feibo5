@@ -10,4 +10,9 @@ export const CONSUMABLES = {
   reset_card: { name: '重置卡', spr: 'reset', desc: '全部冷却清零（武器/冲刺/蒸馏技能）' },
   n2_package: { name: '2N 大礼包', spr: 'doc2n', desc: '60 护盾（12 秒）+ 回 20 HP' },
   resume_refresh: { name: '简历刷新卡', spr: 'doc', desc: '获得一次三选一免费重抽机会' },
+  workers_comp: { name: '工伤报销单', spr: 'doc2n', desc: '按已损失生命报销治疗，溢出转护盾' },
+  sick_leave_note: { name: '带薪病假条', spr: 'doc', desc: '回复生命并获得短暂无敌' },
+  noise_cancel_headset: { name: '降噪耳机', spr: 'reset', desc: '清除举报/诅咒/减速，短暂提速' },
+  power_bank: { name: '共享充电宝', spr: 'quota', desc: '主动技能和冲刺冷却大幅缩短' },
+  admin_supply_bag: { name: '行政补给袋', spr: 'milktea', desc: '拆出一个生存补给和一个回血包' },
 };

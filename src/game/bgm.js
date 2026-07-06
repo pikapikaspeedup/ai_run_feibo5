@@ -189,7 +189,6 @@ function createBus() {
 let buses = null;
 let activeIdx = 0;
 let currentKey = null;
-let lastActiveKey = 'menu';
 
 function ensureBuses() {
   if (buses) return true;
@@ -290,7 +289,6 @@ function switchTrack(key, fadeSec = 1.2) {
   startBus(inBus, key, fadeSec);
   activeIdx = inIdx;
   currentKey = key;
-  if (key !== 'paused') lastActiveKey = key;
 }
 
 function pickPlayingTrack(G) {
@@ -307,7 +305,8 @@ function onStateChange(newState, prevState, G) {
   if (newState === 'paused') return switchTrack('paused');
   if (newState === 'levelup') return; // 三选一短暂弹层，不打断当前音乐
   if (newState === 'playing') {
-    if (prevState === 'paused') return switchTrack(lastActiveKey, 1.2);
+    /* 从暂停恢复同样按当前对局实况重新选曲，而非还原 lastActiveKey——
+     * 暂停中重开新局时那是上一局的曲目，会串播 */
     const key = pickPlayingTrack(G);
     const fade = (currentKey === 'trial' && key === 'battle') ? .4 : 1.2;
     return switchTrack(key, fade);

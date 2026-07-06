@@ -165,6 +165,48 @@ for (const [key, src] of Object.entries({
 /* v2.0 视觉/hitbox 共享自 data/obstacles.js（source of truth）*/
 import { PROP_VISUAL as PROP_SIZE } from './data/obstacles.js';
 
+/* v2.2 怪物高清贴图 drop-in 管线：把 mob_<sprKey>.png（可选 mob_<sprKey>_b.png 第二帧）
+ * 放进 src/assets/generated/ 即自动替换字符画精灵，无文件时零开销回退字符画。
+ * 出图规格与提示词见 dcos/art-pipeline.md */
+const HIFI_MOBS = {};
+const MOB_ANIM = {};   // 帧动画：mob_<key>_f0..fN.png（pixel-animation-grid skill 切片产物）→ MOB_ANIM['mob_<key>'] = [帧...]
+const _mobGlob = import.meta.glob('../assets/generated/mob_*.png', { eager: true, import: 'default' });
+for (const [path, src] of Object.entries(_mobGlob)) {
+  const key = path.split('/').pop().replace('.png', '');
+  const fm = key.match(/^(.+)_f(\d+)$/);
+  const img = new Image();
+  img.onload = () => {
+    if (fm) (MOB_ANIM[fm[1]] = MOB_ANIM[fm[1]] || [])[+fm[2]] = img;
+    else HIFI_MOBS[key] = img;
+  };
+  img.src = src;
+}
+
+/* 屏幕空间径向渐变缓存：参数逐帧恒定（低血/圈外/受伤红晕 1 个 + 停电 5 个），
+ * 避免每帧 createRadialGradient；渐变按满 alpha 构建，绘制时用 globalAlpha 调制强度。
+ * VIEW_W/H 目前是常量，但仍带尺寸守卫：万一画布内部分辨率变化自动失效重建 */
+let _grads = null;
+function screenGrads(ctx) {
+  if (_grads && _grads.w === VIEW_W && _grads.h === VIEW_H) return _grads;
+  const mk = (x, y, r0, r1, c0, c1) => {
+    const g = ctx.createRadialGradient(x, y, r0, x, y, r1);
+    g.addColorStop(0, c0); g.addColorStop(1, c1);
+    return g;
+  };
+  const cornerPts = [[0, 0], [VIEW_W, 0], [0, VIEW_H], [VIEW_W, VIEW_H]];
+  _grads = {
+    w: VIEW_W, h: VIEW_H,
+    /* 停电视野圈：以原点为中心构建，绘制时 translate 到玩家屏幕坐标 */
+    vision: mk(0, 0, 40, 100, 'rgba(0,0,0,0)', 'rgba(0,0,0,0.75)'),
+    /* 停电四角警灯红光 */
+    cornerPts,
+    corners: cornerPts.map(([x, y]) => mk(x, y, 0, 90, 'rgba(255,30,30,1)', 'rgba(255,30,30,0)')),
+    /* 低血/圈外/受伤红晕 */
+    vignette: mk(VIEW_W / 2, VIEW_H / 2, VIEW_H * .42, VIEW_H * .72, 'rgba(255,50,50,0)', 'rgba(255,50,50,1)'),
+  };
+  return _grads;
+}
+
 export function render(ctx) {
   const G = getG(), state = getState();
   ctx.imageSmoothingEnabled = false;
@@ -395,7 +437,9 @@ export function render(ctx) {
     }
   };
   for (const o of G.obstacles) if (!o.destroyed || o.destroyedT > 0) drawables.push({ y: o.sy + 14, draw: () => drawProp(o, o.sx, o.sy) });
-  for (const d of G.decor) if (!d.destroyed || d.destroyedT > 0) drawables.push({ y: d.y + 12, draw: () => drawProp(d, d.x, d.y) });
+  /* decor 与 obstacles 同走 spawnProp，须传原始锚点 sx/sy——
+   * d.x/d.y 是已加过 PROP_VISUAL ox/oy 的 hitbox 坐标，drawProp 内部会再加一次导致贴图偏移 */
+  for (const d of G.decor) if (!d.destroyed || d.destroyedT > 0) drawables.push({ y: d.y + 12, draw: () => drawProp(d, d.sx, d.sy) });
   for (const u of G.units) if (u.alive) drawables.push({ y: u.y + 3, draw: () => drawUnit(ctx, G, u) });
   drawables.sort((a, b) => a.y - b.y);
   for (const d of drawables) d.draw();
@@ -439,36 +483,35 @@ export function render(ctx) {
     }
   }
 
-  /* v2.0 §3.5 停电事件：屏幕暗化 + 玩家周围可见圆锥 + §8.20 警灯（四角红闪 + 中央旋转警灯）*/
+  /* v2.0 §3.5 停电事件：屏幕暗化 + 玩家周围可见圆 + §8.20 警灯（四角红闪 + 中央旋转警灯）*/
   if (G.blackoutActiveT > 0) {
+    const gr = screenGrads(ctx);
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    /* 挖一个圆形可见区域给玩家 */
     if (G.player.alive) {
+      /* 「中心透明→边缘黑」径向渐变一次铺满全屏：视野圈内亮、圈外暗。
+       * 不能用 destination-out 挖洞——那会把已绘制的世界连同遮罩一起擦掉 */
       const pl = G.player;
-      const px = (pl.x - cam.x), py = (pl.y - cam.y);
-      const grd = ctx.createRadialGradient(px, py, 40, px, py, 100);
-      grd.addColorStop(0, 'rgba(0,0,0,0)');
-      grd.addColorStop(1, 'rgba(0,0,0,0.75)');
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = 'rgba(255,255,255,1)';
-      ctx.beginPath(); ctx.arc(px, py, 100, 0, Math.PI * 2); ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
+      const px = pl.x - cam.x, py = pl.y - cam.y;
+      ctx.translate(px, py);
+      ctx.fillStyle = gr.vision;
+      ctx.fillRect(-px, -py, VIEW_W, VIEW_H);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    } else {
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     }
     /* §8.20 警灯：四角闪红（2Hz 脉动）+ 顶部中央旋转警灯 icon */
     const pulse = 0.4 + 0.4 * Math.sin(G.t * 8);
-    ctx.fillStyle = `rgba(255, 30, 30, ${pulse * 0.6})`;
     const cornerR = 90;
-    /* 四个角径向渐变 */
-    for (const [cx, cy] of [[0, 0], [VIEW_W, 0], [0, VIEW_H], [VIEW_W, VIEW_H]]) {
-      const g2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, cornerR);
-      g2.addColorStop(0, `rgba(255, 30, 30, ${pulse * 0.7})`);
-      g2.addColorStop(1, 'rgba(255, 30, 30, 0)');
-      ctx.fillStyle = g2;
+    /* 四个角径向渐变（缓存渐变 + globalAlpha 调制脉动强度）*/
+    ctx.globalAlpha = pulse * 0.7;
+    for (let i = 0; i < 4; i++) {
+      const [cx, cy] = gr.cornerPts[i];
+      ctx.fillStyle = gr.corners[i];
       ctx.beginPath(); ctx.arc(cx, cy, cornerR, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.globalAlpha = 1;
     /* 顶部中央旋转警灯 icon（红圆 + 旋转扫光）*/
     const iconX = VIEW_W / 2, iconY = 34;
     const rot = G.t * 4;
@@ -489,10 +532,10 @@ export function render(ctx) {
     ctx.lineTo(38, 8);
     ctx.closePath();
     ctx.fill();
+    ctx.restore();   // 结束旋转扫光局部变换
+    /* 下面这个 restore 已回到外层世界坐标系 translate(-ox,-oy)，
+     * 不能再补 translate(-cam.x,-cam.y)——否则其后的粒子/红线圈/飘字被双重偏移 */
     ctx.restore();
-    ctx.restore();
-    /* Restore transform */
-    ctx.translate(-cam.x, -cam.y);
   }
 
   for (const p of G.parts) {
@@ -584,11 +627,11 @@ export function render(ctx) {
     const outside = dist(pl.x, pl.y, z.cx, z.cy) > z.r;
     if (low || outside || pl.hurtT > 0) {
       const a = Math.max(low ? .22 : 0, outside ? .18 + .08 * Math.sin(G.t * 6) : 0, pl.hurtT > 0 ? .3 : 0);
-      const grd = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, VIEW_H * .42, VIEW_W / 2, VIEW_H / 2, VIEW_H * .72);
-      grd.addColorStop(0, 'rgba(255,50,50,0)');
-      grd.addColorStop(1, `rgba(255,50,50,${a})`);
-      ctx.fillStyle = grd;
+      /* 缓存的满 alpha 渐变 × globalAlpha=a，等价于每帧重建 0→a 渐变 */
+      ctx.globalAlpha = a;
+      ctx.fillStyle = screenGrads(ctx).vignette;
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      ctx.globalAlpha = 1;
     }
     if (pl.curses.hallu > 0) {
       ctx.fillStyle = `rgba(182,101,255,${.06 + .04 * Math.sin(G.t * 5)})`;
@@ -615,6 +658,19 @@ function drawUnit(ctx, G, u) {
         scale = u.eliteType === 'overfit' ? 1.3 : u.eliteTier === 2 ? 1.12 : u.isSummon ? .7 : .9;
       }
     }
+  }
+  /* v2.2 怪物 PNG 覆盖，三档：帧序列动画 > _b 双帧 > 单帧静态，归一化到 ~18px 高。
+   * 帧序列节奏 = 走路里程(walkT) + 慢速全局钟（静止怪也保持呼吸感），chaseOffX 做单位间相位错开 */
+  if (u.isMob && u.sprKey) {
+    const anim = MOB_ANIM[u.sprKey];
+    let hifiMob = null;
+    if (anim && anim.length && anim.every(f => f)) {
+      hifiMob = anim[Math.abs(Math.floor((u.walkT || 0) * 1.4 + G.t * 4 + (u.chaseOffX || 0))) % anim.length];
+    } else {
+      const alt = HIFI_MOBS[u.sprKey + '_b'];
+      hifiMob = alt && Math.floor(G.t * 6) % 2 ? alt : HIFI_MOBS[u.sprKey];
+    }
+    if (hifiMob) { spr = hifiMob; scale = Math.min(1, 18 / hifiMob.height); }
   }
   const w = spr.width, h = spr.height;
 
