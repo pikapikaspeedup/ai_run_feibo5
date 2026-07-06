@@ -91,6 +91,9 @@ export default function Hud() {
       : <>捡同款芯片升级（{w.lvl}/5）· 融合搭档：{WEAPONS[rp.partner].name}</>;
     if (def.kind === 'charge') hint = <>按住鼠标蓄力，松开发射 · {hint}</>;
   }
+  /* v2.3 双持状态 */
+  if (pl.weapon2) hint = <>{hint} · 🗡副手 {WEAPONS[pl.weapon2.id].name} Lv.{pl.weapon2.lvl}</>;
+  else if (pl.weapon2Unlocked) hint = <>{hint} · 🗡副手槽空缺：捡异款芯片自动装备</>;
 
   /* 拾取提示 */
   const hc = G.hoverChip;

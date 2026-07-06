@@ -168,6 +168,89 @@ import { PROP_VISUAL as PROP_SIZE } from './data/obstacles.js';
 /* v2.2 怪物高清贴图 drop-in 管线：把 mob_<sprKey>.png（可选 mob_<sprKey>_b.png 第二帧）
  * 放进 src/assets/generated/ 即自动替换字符画精灵，无文件时零开销回退字符画。
  * 出图规格与提示词见 dcos/art-pipeline.md */
+/* v2.2 特效帧动画：fx_<name>_f0..fN.png（pixel-animation-grid 产物）——爆炸/命中火花/挥砍轨迹。
+ * 一次性播放（按 fx 生命进度取帧），素材缺失时各绘制点回退原有程序化图形 */
+const FX_ANIM = {};
+const _fxGlob = import.meta.glob('../assets/generated/fx_*.png', { eager: true, import: 'default' });
+for (const [path, src] of Object.entries(_fxGlob)) {
+  const key = path.split('/').pop().replace('.png', '');
+  const fm = key.match(/^(.+)_f(\d+)$/);
+  if (!fm) continue;
+  const img = new Image();
+  img.onload = () => { (FX_ANIM[fm[1]] = FX_ANIM[fm[1]] || [])[+fm[2]] = img; };
+  img.src = src;
+}
+function fxFrame(name, progress) {
+  const a = FX_ANIM[name];
+  if (!a || !a.length || !a.every(f => f)) return null;
+  return a[Math.min(a.length - 1, Math.max(0, Math.floor(progress * a.length)))];
+}
+/* 一次性特效查表：type → [帧集名, 尺寸倍率, 垂直锚(0.5=居中, 越大越靠上)] */
+const ONESHOT_FX = {
+  nukefx: ['fx_nuke', 2.8, .8], critfx: ['fx_crit', 2.4, .5], hurtfx: ['fx_hurt', 2.4, .5],
+  pickupfx: ['fx_pickup', 2.2, .5], evolutionfx: ['fx_evolution', 2.6, .8],
+  revivefx: ['fx_revive', 2.6, .75], summonfx: ['fx_summon', 2.4, .7],
+  fusionfx: ['fx_fusion', 2.8, .6], bossslamfx: ['fx_bossslam', 2.6, .6],
+  bosspiefx: ['fx_bosspie', 2.6, .85], bossroarfx: ['fx_bossroar', 2.6, .6],
+};
+/* 地面贴花（decal_f0..8：咖啡渍/文件/线缆等，切自 decal_sheet） */
+const DECAL_IMGS = [];
+const _decalGlob = import.meta.glob('../assets/generated/decal_*.png', { eager: true, import: 'default' });
+for (const [path, src] of Object.entries(_decalGlob)) {
+  const fm = path.match(/decal_f(\d+)\.png$/);
+  if (!fm) continue;
+  const img = new Image();
+  img.onload = () => { DECAL_IMGS[+fm[1]] = img; };
+  img.src = src;
+}
+
+/* 精英/老板专属立绘动画（elite_<eliteType>_f*.png / boss_idle_f*.png）——原来精英全是换色工人 */
+const ELITE_ANIM = {};
+const _eliteGlob = { ...import.meta.glob('../assets/generated/elite_*.png', { eager: true, import: 'default' }),
+  ...import.meta.glob('../assets/generated/boss_idle_*.png', { eager: true, import: 'default' }),
+  ...import.meta.glob('../assets/generated/player_*.png', { eager: true, import: 'default' }),   // v2.4 人设皮肤
+  ...import.meta.glob('../assets/generated/proj_*.png', { eager: true, import: 'default' }) };   // v2.4 弹道贴图
+for (const [path, src] of Object.entries(_eliteGlob)) {
+  const key = path.split('/').pop().replace('.png', '');
+  const fm = key.match(/^(.+)_f(\d+)$/);
+  if (!fm) continue;
+  const img = new Image();
+  img.onload = () => { (ELITE_ANIM[fm[1]] = ELITE_ANIM[fm[1]] || [])[+fm[2]] = img; };
+  img.src = src;
+}
+function eliteFrame(name, t) {
+  const a = ELITE_ANIM[name];
+  if (!a || !a.length || !a.every(f => f)) return null;
+  return a[Math.abs(Math.floor(t)) % a.length];
+}
+/* v2.4 头顶状态图标（status_<key>.png）：诅咒/举报/易伤/无敌/减速/灼烧/眩晕——原来只有飘字，持续状态不可见 */
+const STATUS_ICONS = {};
+const _statusGlob = import.meta.glob('../assets/generated/status_*.png', { eager: true, import: 'default' });
+for (const [path, src] of Object.entries(_statusGlob)) {
+  const key = path.split('/').pop().replace('.png', '').replace(/^status_/, '');
+  const img = new Image();
+  img.onload = () => { STATUS_ICONS[key] = img; };
+  img.src = src;
+}
+/* 武器芯片专属图标（chip_<id>.png）——原来所有芯片同一张图，只靠名字颜色区分，识别度极差 */
+const CHIP_ICONS = {};
+const _chipGlob = import.meta.glob('../assets/generated/chip_*.png', { eager: true, import: 'default' });
+for (const [path, src] of Object.entries(_chipGlob)) {
+  const key = path.split('/').pop().replace('.png', '').replace(/^chip_/, '');
+  const img = new Image();
+  img.onload = () => { CHIP_ICONS[key] = img; };
+  img.src = src;
+}
+/* 消耗品专属图标（item_<id>.png）——原来 15 种道具共用 6 个小图 */
+const ITEM_ICONS = {};
+const _itemGlob = import.meta.glob('../assets/generated/item_*.png', { eager: true, import: 'default' });
+for (const [path, src] of Object.entries(_itemGlob)) {
+  const key = path.split('/').pop().replace('.png', '').replace(/^item_/, '');
+  const img = new Image();
+  img.onload = () => { ITEM_ICONS[key] = img; };
+  img.src = src;
+}
+
 const HIFI_MOBS = {};
 const MOB_ANIM = {};   // 帧动画：mob_<key>_f0..fN.png（pixel-animation-grid skill 切片产物）→ MOB_ANIM['mob_<key>'] = [帧...]
 const _mobGlob = import.meta.glob('../assets/generated/mob_*.png', { eager: true, import: 'default' });
@@ -231,6 +314,21 @@ export function render(ctx) {
   ctx.strokeStyle = '#0b0d12'; ctx.lineWidth = 6;
   ctx.strokeRect(3, 3, TUNE.world - 6, TUNE.world - 6);
 
+  /* v2.3 地面贴花：咖啡渍/散落文件/线缆等（画在地板上、单位之下，屏外由 canvas 自动裁剪） */
+  if (G.decals && DECAL_IMGS.length) {
+    for (const d of G.decals) {
+      const img = DECAL_IMGS[d.i % DECAL_IMGS.length];
+      if (!img) continue;
+      if (d.x < ox - 40 || d.x > ox + VIEW_W + 40 || d.y < oy - 40 || d.y > oy + VIEW_H + 40) continue;
+      ctx.save();
+      ctx.globalAlpha = .45;
+      ctx.translate(d.x, d.y);
+      ctx.rotate(d.a);
+      ctx.drawImage(img, -15, -15, 30, 30);
+      ctx.restore();
+    }
+  }
+
   /* v2.0 Phase F Gap 4 · 关闭 chunk 世界视图叠加：半透明红色蒙层 + "禁"字警告 */
   if (G.chunkClosed && G.chunkGrid) {
     const CHUNK_STRIDE_W = 500;
@@ -269,7 +367,23 @@ export function render(ctx) {
   for (const p of G.pickups) {
     const by = Math.sin(p.bob) * 1.5;
     if (p.type === 'chip') {
-      ctx.drawImage(chipSprite(WEAPONS[p.id].color), Math.round(p.x - 4), Math.round(p.y - 4 + by));
+      /* v2.3 攒芯片指示圈：同款（可升级）金圈脉冲 / 可进副手槽青圈——一眼锁定该捡哪块 */
+      const plw = G.player.alive ? G.player : null;
+      if (plw) {
+        const matchMain = !plw.weapon.leg && p.id === plw.weapon.id && plw.weapon.lvl < 5;
+        const matchOff = plw.weapon2 && !plw.weapon2.leg && p.id === plw.weapon2.id && plw.weapon2.lvl < 5;
+        const slotOff = plw.weapon2Unlocked && !plw.weapon2 && p.id !== plw.weapon.id;
+        if (matchMain || matchOff || slotOff) {
+          ctx.globalAlpha = .55 + .35 * Math.sin(G.t * 6 + p.bob);
+          ctx.strokeStyle = slotOff ? '#7ac8ff' : '#ffcf33';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(p.x, p.y + by, 8.5, 0, Math.PI * 2); ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+      const cIcon = CHIP_ICONS[p.id];
+      if (cIcon) ctx.drawImage(cIcon, Math.round(p.x - 7), Math.round(p.y - 7 + by), 14, 14);
+      else ctx.drawImage(chipSprite(WEAPONS[p.id].color), Math.round(p.x - 4), Math.round(p.y - 4 + by));
       if (p.lvl > 1) {
         ctx.font = '6px monospace'; ctx.fillStyle = '#ffcf33';
         ctx.fillText('Lv' + p.lvl, p.x - 5, p.y - 7 + by);
@@ -311,8 +425,13 @@ export function render(ctx) {
       ctx.fillStyle = '#7ee08a'; ctx.fillRect(Math.round(p.x - 1), Math.round(p.y - 1 + by), 3, 3);
     } else if (p.type === 'item') {
       const c = CONSUMABLES[p.id];
-      const hifiSwap = HIFI.ready && (c.spr === 'coffee' ? HIFI.coffee : c.spr === 'bing' ? HIFI.bing : null);
-      ctx.drawImage(hifiSwap || SPR[c.spr], Math.round(p.x - 5), Math.round(p.y - 6 + by));
+      const icon = ITEM_ICONS[p.id];
+      if (icon) {
+        ctx.drawImage(icon, Math.round(p.x - 7), Math.round(p.y - 9 + by), 14, 14);   // 专属图标（128→14px）
+      } else {
+        const hifiSwap = HIFI.ready && (c.spr === 'coffee' ? HIFI.coffee : c.spr === 'bing' ? HIFI.bing : null);
+        ctx.drawImage(hifiSwap || SPR[c.spr], Math.round(p.x - 5), Math.round(p.y - 6 + by));
+      }
     } else {
       ctx.drawImage(SPR.xp, Math.round(p.x - 3), Math.round(p.y - 3 + by));
     }
@@ -428,6 +547,15 @@ export function render(ctx) {
       else if (SPR[o.spr]) ctx.drawImage(SPR[o.spr], x, y, 52, 32);
     }
     ctx.globalAlpha = 1;
+    /* v2.3 咖啡机蒸汽循环（还有存货才冒气） */
+    if (o.spr === 'coffee_machine' && !o.destroyed && (o._coffeeUses || 0) < 4) {
+      const sf = fxFrame('fx_coffee', ((G.t * 5 + o.x * .07) % 9) / 9);
+      if (sf) {
+        ctx.globalAlpha = .8;
+        ctx.drawImage(sf, x + (s ? s.ox + s.dw / 2 : 16) - 9, y + (s ? s.oy : 0) - 16, 18, 18);
+        ctx.globalAlpha = 1;
+      }
+    }
     /* 掩体 hp 条：仅在受伤后显示 */
     if (!o.destroyed && o.hp < o.hpMax && o.hp > 0) {
       const bw = s ? s.dw - 4 : 40, bx = x + (s ? s.ox + 2 : 2), by = y + (s ? s.oy - 4 : -4);
@@ -651,6 +779,8 @@ function drawUnit(ctx, G, u) {
     if (u.isBoss) {
       spr = HIFI.bossFrames[Math.floor(G.t * 2) % 2];
       scale = 1.5;
+      const bf = eliteFrame('boss_idle', G.t * 5);
+      if (bf) { spr = bf; scale = 44 / bf.height; }   // 九帧待机：喝咖啡/看手机/整理领带
     } else if (u.eliteType !== 'hallu' && !u.isMob) {
       const frames = workerFrames(u.shirt);
       if (frames) {
@@ -659,9 +789,28 @@ function drawUnit(ctx, G, u) {
       }
     }
   }
+  /* v2.4 玩家人设皮肤：锁定人设后换专属立绘（player_<persona>_f0..8 走路循环） */
+  if (u.isPlayer && u.persona) {
+    const pf = eliteFrame('player_' + u.persona, (u.walkT || 0) * 1.4 + G.t * 2);
+    if (pf) { spr = pf; scale = 26 / pf.height; }
+  }
+  /* v2.4 HR 制服小兵专属立绘 */
+  if (u.isHR) {
+    const hf = eliteFrame('elite_hr', G.t * 5 + u.x * .05);
+    if (hf) { spr = hf; scale = 22 / hf.height; }
+  }
+  /* v2.2 精英专属立绘：elite_<type>_f0..8 待机动画（tier2 大一号，竞争壁垒专家再大一号） */
+  if (u.isElite && !u.isBoss && u.eliteType) {
+    const ef = eliteFrame('elite_' + u.eliteType, G.t * 5 + (u.x * .03));
+    if (ef) {
+      spr = ef;
+      const targetH = u.eliteType === 'overfit' ? 34 : u.eliteTier === 2 ? 30 : 24;
+      scale = targetH / ef.height;
+    }
+  }
   /* v2.2 怪物 PNG 覆盖，三档：帧序列动画 > _b 双帧 > 单帧静态，归一化到 ~18px 高。
    * 帧序列节奏 = 走路里程(walkT) + 慢速全局钟（静止怪也保持呼吸感），chaseOffX 做单位间相位错开 */
-  if (u.isMob && u.sprKey) {
+  if ((u.isMob || u.isSummon) && u.sprKey) {   // v2.4 放宽到召唤物（OPC 外包幻影/数字分身/炮灰墙专属立绘）
     const anim = MOB_ANIM[u.sprKey];
     let hifiMob = null;
     if (anim && anim.length && anim.every(f => f)) {
@@ -685,12 +834,17 @@ function drawUnit(ctx, G, u) {
   ctx.drawImage(spr, Math.round(-w / 2 * scale), Math.round(-(h - 3) * scale), Math.round(w * scale), Math.round(h * scale));
   ctx.restore();
 
-  /* 受击白闪 */
+  /* 受击白闪：按精灵剪影闪白——原来是整张贴图的半透明白矩形，
+   * 在 128px 帧素材（老板/精英/怪物）上会盖出一大块白色浮层 */
   if (u.hurtT > .06) {
-    ctx.globalAlpha = .5;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(x - w / 2 * scale, y - (h - 3) * scale + bob, w * scale, (h - 2) * scale);
-    ctx.globalAlpha = 1;
+    ctx.save();
+    ctx.globalAlpha = .55;
+    ctx.filter = 'brightness(0) invert(1)';
+    ctx.translate(x, y + bob);
+    ctx.scale(face, 1);
+    ctx.drawImage(spr, Math.round(-w / 2 * scale), Math.round(-(h - 3) * scale), Math.round(w * scale), Math.round(h * scale));
+    ctx.filter = 'none';
+    ctx.restore();
   }
   /* 对齐守卫的正面护盾弧 */
   if (u.eliteType === 'align') {
@@ -702,6 +856,30 @@ function drawUnit(ctx, G, u) {
     ctx.fillStyle = '#ffcf33';
     ctx.fillRect(x - 1, y - 21 + bob, 3, 3);
     ctx.fillRect(x, y - 19 + bob, 1, 2);
+  }
+  /* v2.4 头顶状态图标行：诅咒/易伤/无敌/减速/眩晕一目了然（素材缺失时静默跳过，原有程序化标记保留兜底） */
+  {
+    const st = [];
+    if (u.curses) {
+      if (u.curses.hallu > 0) st.push('hallu');
+      if (u.curses.overfit > 0) st.push('overfit');
+      if (u.curses.repeat > 0) st.push('repeat');
+    }
+    if (u.reportedT > 0) st.push('reported');
+    if (u.vulnT > 0) st.push('vuln');
+    if (u.invulnT > .25) st.push('invuln');
+    if (u.oaSlowT > 0) st.push('slow');
+    if (u.stunT > 0) st.push('stun');
+    if (st.length) {
+      let drawn = 0;
+      const w0 = Math.min(st.length, 5) * 8;
+      for (const k of st) {
+        const img = STATUS_ICONS[k];
+        if (!img || drawn >= 5) continue;
+        ctx.drawImage(img, Math.round(x - w0 / 2 + drawn * 8), Math.round(y - 31 + bob), 7, 7);
+        drawn++;
+      }
+    }
   }
   /* 被举报标记：闪烁红色感叹号 */
   if (u.reportedT > 0 && Math.sin(G.t * 12) > -0.3) {
@@ -794,6 +972,19 @@ function drawUnit(ctx, G, u) {
 
 function drawProj(ctx, G, p) {
   const x = Math.round(p.x), y = Math.round(p.y);
+  /* v2.4 武器专属弹道贴图（proj_<武器id>_f0..8）：帧随时间推进，整体沿速度方向旋转 */
+  if (p.sprKey) {
+    const fr = eliteFrame(p.sprKey, G.t * 12 + (p.x + p.y) * .03);
+    if (fr) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.atan2(p.vy, p.vx));
+      const s = p.shape === 'bigboom' || p.shape === 'bigpie' ? 18 : 12;
+      ctx.drawImage(fr, -s / 2, -s / 2, s, s);
+      ctx.restore();
+      return;
+    }
+  }
   ctx.fillStyle = p.color;
   switch (p.shape) {
     case 'diamond':
@@ -828,9 +1019,21 @@ function drawProj(ctx, G, p) {
       ctx.fillRect(x - 2, y - 1, 4, 1);
       ctx.fillRect(x - 2, y + 1, 3, 1);
       break;
-    case 'mugp':
-      ctx.drawImage(HIFI.ready && HIFI.coffee ? HIFI.coffee : SPR.coffee, x - 4, y - 5);
+    case 'mugp': {
+      /* 九帧翻滚马克杯（素材未载回退咖啡图标） */
+      const mf = fxFrame('proj_mug', ((G.t * 14 + p.x * .11) % 9) / 9);
+      if (mf) ctx.drawImage(mf, x - 7, y - 8, 14, 14);
+      else ctx.drawImage(HIFI.ready && HIFI.coffee ? HIFI.coffee : SPR.coffee, x - 4, y - 5);
       break;
+    }
+    case 'doc': {
+      /* 九帧旋转文件（离职申请单等） */
+      const df = fxFrame('proj_paper', ((G.t * 14 + p.x * .13) % 9) / 9);
+      if (df) { ctx.drawImage(df, x - 6, y - 7, 13, 13); break; }
+      ctx.fillStyle = '#f2efe6'; ctx.fillRect(x - 3, y - 4, 6, 7);
+      ctx.fillStyle = '#ff4f4f'; ctx.fillRect(x + 1, y + 1, 2, 2);
+      break;
+    }
     case 'pie':
       ctx.drawImage(HIFI.ready ? HIFI.bing : SPR.bing, x - 5, y - 5);
       break;
@@ -897,20 +1100,119 @@ function drawFx(ctx, f) {
     }
     ctx.stroke();
   } else if (f.type === 'boom') {
-    ctx.strokeStyle = f.color; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1 - k * .6), 0, Math.PI * 2); ctx.stroke();
-    ctx.globalAlpha = k * .25;
-    ctx.fillStyle = f.color;
-    ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1 - k * .6), 0, Math.PI * 2); ctx.fill();
+    const fr = fxFrame('fx_explosion', 1 - k);
+    if (fr) {
+      /* 九帧爆炸 + 底层原色细环保留技能色语义 */
+      ctx.globalAlpha = Math.min(1, k * 1.6);
+      const s = f.r * 2.4;
+      ctx.drawImage(fr, Math.round(f.x - s / 2), Math.round(f.y - s / 2), Math.round(s), Math.round(s));
+      ctx.globalAlpha = k * .45;
+      ctx.strokeStyle = f.color; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1 - k * .6), 0, Math.PI * 2); ctx.stroke();
+    } else {
+      ctx.strokeStyle = f.color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1 - k * .6), 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = k * .25;
+      ctx.fillStyle = f.color;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1 - k * .6), 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (f.type === 'spark') {
+    /* 子弹命中火花（素材未加载时静默跳过——命中粒子仍在） */
+    const fr = fxFrame('fx_spark', 1 - k);
+    if (fr) {
+      ctx.globalAlpha = 1;
+      const s = (f.r || 9) * 2.6;
+      ctx.drawImage(fr, Math.round(f.x - s / 2), Math.round(f.y - s / 2), Math.round(s), Math.round(s));
+    }
+  } else if (f.type === 'muzzle') {
+    /* 枪口火焰：素材左锚朝右，按开火方向旋转，焰体在枪口前方 */
+    const fr = fxFrame('fx_muzzle', 1 - k);
+    if (fr) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, k * 1.3);
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.ang || 0);
+      const s = (f.r || 10) * 2.4;
+      ctx.drawImage(fr, Math.round(-s * .25), Math.round(-s / 2), Math.round(s), Math.round(s));
+      ctx.restore();
+    }
+  } else if (f.type === 'healfx') {
+    const fr = fxFrame('fx_heal', 1 - k);
+    if (fr) {
+      ctx.globalAlpha = Math.min(1, k * 1.4);
+      const s = (f.r || 14) * 2.2;
+      ctx.drawImage(fr, Math.round(f.x - s / 2), Math.round(f.y - s * .7), Math.round(s), Math.round(s));
+    }
+  } else if (f.type === 'levelupfx') {
+    const fr = fxFrame('fx_levelup', 1 - k);
+    if (fr) {
+      ctx.globalAlpha = Math.min(1, k * 1.3);
+      const s = (f.r || 20) * 2.4;
+      ctx.drawImage(fr, Math.round(f.x - s / 2), Math.round(f.y - s * .8), Math.round(s), Math.round(s));
+    }
+  } else if (f.type === 'shieldbreak') {
+    const fr = fxFrame('fx_shieldbreak', 1 - k);
+    if (fr) {
+      ctx.globalAlpha = Math.min(1, k * 1.4);
+      const s = (f.r || 14) * 2.4;
+      ctx.drawImage(fr, Math.round(f.x - s / 2), Math.round(f.y - s / 2), Math.round(s), Math.round(s));
+    }
+  } else if (f.type === 'executefx') {
+    const fr = fxFrame('fx_execute', 1 - k);
+    if (fr) {
+      ctx.globalAlpha = Math.min(1, k * 1.4);
+      const s = (f.r || 16) * 2.4;
+      ctx.drawImage(fr, Math.round(f.x - s / 2), Math.round(f.y - s / 2), Math.round(s), Math.round(s));
+    }
+  } else if (f.type === 'teleportfx') {
+    const fr = fxFrame('fx_teleport', 1 - k);
+    if (fr) {
+      ctx.globalAlpha = Math.min(1, k * 1.3);
+      const s = (f.r || 16) * 2.4;
+      ctx.drawImage(fr, Math.round(f.x - s / 2), Math.round(f.y - s / 2), Math.round(s), Math.round(s));
+    }
+  } else if (ONESHOT_FX[f.type]) {
+    /* v2.3 通用一次性特效：核爆/暴击/受击/拾取/觉醒/复活/召唤 */
+    const [name, mul, yAnchor] = ONESHOT_FX[f.type];
+    const fr = fxFrame(name, 1 - k);
+    if (fr) {
+      ctx.globalAlpha = Math.min(1, k * 1.4);
+      const s = (f.r || 14) * mul;
+      ctx.drawImage(fr, Math.round(f.x - s / 2), Math.round(f.y - s * yAnchor), Math.round(s), Math.round(s));
+    }
+  } else if (f.type === 'dashfx') {
+    /* 冲刺残影：素材横向朝右，按冲刺方向旋转 */
+    const fr = fxFrame('fx_dash', 1 - k);
+    if (fr) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, k * 1.2);
+      ctx.translate(f.x, f.y);
+      ctx.rotate((f.ang || 0) + Math.PI);   /* 残影拖在身后 */
+      const s = (f.r || 14) * 2.6;
+      ctx.drawImage(fr, Math.round(-s * .7), Math.round(-s / 2), Math.round(s), Math.round(s));
+      ctx.restore();
+    }
   } else if (f.type === 'slash') {
-    /* 键盘刀光：弧形斩击 */
-    ctx.globalAlpha = k * .9;
-    ctx.strokeStyle = f.color;
-    ctx.lineWidth = 6 * k + 1;
-    ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.75 + (1 - k) * .3), f.ang - f.spread, f.ang + f.spread); ctx.stroke();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2 * k;
-    ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.75 + (1 - k) * .3), f.ang - f.spread * .6, f.ang + f.spread * .6); ctx.stroke();
+    const sfr = fxFrame('fx_slash', 1 - k);
+    if (sfr) {
+      /* 九帧月牙挥砍：素材开口朝右，按挥击方向旋转 */
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, k * 1.4);
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.ang);
+      const s = f.r * 2.2;
+      ctx.drawImage(sfr, Math.round(-s / 2), Math.round(-s / 2), Math.round(s), Math.round(s));
+      ctx.restore();
+    } else {
+      /* 键盘刀光：弧形斩击 */
+      ctx.globalAlpha = k * .9;
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 6 * k + 1;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.75 + (1 - k) * .3), f.ang - f.spread, f.ang + f.spread); ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2 * k;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.75 + (1 - k) * .3), f.ang - f.spread * .6, f.ang + f.spread * .6); ctx.stroke();
+    }
   } else if (f.type === 'ringwarn') {
     /* 预警圈：考勤点名 / 会议邀请 */
     ctx.globalAlpha = .45 + .3 * Math.sin(f.t * 22);

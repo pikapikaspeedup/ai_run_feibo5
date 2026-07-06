@@ -58,7 +58,7 @@ Subject: <见下表>
 
 ## 帧动画（pixel-animation-grid 流程）
 
-- **状态（2026-07-06）**：全部 25 只怪已各有 **9 帧动画**（`mob_<key>_f0..f8.png`，225 帧，128×128 透明底）✅。
+- **状态（2026-07-07）**：`generated/` 累计 **925 文件、84 组九帧动画**。覆盖：25 只怪 + 10 种精英 + 老板 + **6 部门 Boss（elite_<id>_dept，键=DEPT_BOSSES）** + HR（elite_hr）+ OPC 召唤三件套（mob_opc_*）+ **5 套人设玩家皮肤（player_<persona>）** + **12 种武器专属弹道（proj_<id>）** + 23 组战斗/Boss 技能特效（fx_*，含画大饼/咆哮/拍桌/融合）+ 图标层：15 消耗品 item_*、12 武器芯片 chip_*、9 头顶状态 status_*、5 人设头像 portrait_*（LevelUpScreen/PauseScreen 已挂）、4 卡类 cardicon_* ✅。库图（多主体一图）用 3×3/4×4 网格 + 语义重命名切片；注意 **zsh 数组下标从 1 起**，切片循环务必用 bash 或 0 基显式索引。
 - 生成流程（两阶段，见 `~/.codex/skills/pixel-animation-grid/SKILL.md`）：
   1. Phase 1：`codex exec --dangerously-bypass-approvals-and-sandbox "Follow ~/.codex/skills/pixel-animation-grid/SKILL.md Phase 1 ONLY ... 3x3 GRID ... save RAW to src/assets/generated/frame_tests/<key>_anim_3x3_raw.png"`——每只按运动特征给循环类型（走路/奔跑/悬浮/旋转/待机脉冲），绿色主体的怪（如蜗牛）改用 #ff00ff 品红幕。
   2. Phase 2：`bash slice_anim.sh <key> <raw> 3`（脚本已修正 SKILL 示例中 1024÷3 除不尽产生空白细条瓦片的坑：先缩放到 1023 再切）。

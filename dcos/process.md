@@ -1,5 +1,438 @@
 # Process
 
+## 2026-07-07 - MiniMax Green Nail/Tack Projectile Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop animation grid for a green glowing nail/tack projectile with a three stacked-bar emblem, spinning drill-like while pointing right.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw byte-identical copy to `src/assets/generated/frame_tests/proj_minimax_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, cropping, or image cleanup was performed.
+- Verification: saved project copy is byte-identical to the generated source PNG.
+- Visual/drift check: all 9 cells show the same right-facing green glowing nail/tack projectile with a clear three stacked-bar emblem and drill-like spin/highlight stages. Frame 8 is visually close to frame 0 for loop return. Estimated raw-cell foreground bbox center drift is about 15.5px horizontally and 45px vertically across 418px cells; foreground centroid drift is about 11.9px horizontally and 50.3px vertically, mainly because the bottom row sits higher than the top row. Background is visually green but not mathematically exact uniform `#00ff00`; 0 exact `#00ff00` pixels were detected, with sampled corner medians around `rgb(17-18,246-247,16-17)`.
+- Status: complete.
+
+## 2026-07-07 - Grok Silver Boomerang Projectile Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop animation grid for a pale silver boomerang blade projectile spinning through 9 evenly spaced rotation angles with motion blur arcs on the blade tips.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw byte-identical copy to `src/assets/generated/frame_tests/proj_grok_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, cropping, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same pale silver boomerang projectile with dark outline, rotating through evenly spaced spin stages with tip motion-blur arcs; frame 8 is close to frame 0 for loop return. Estimated raw-cell largest-component bbox center drift is about 71px horizontally and 44px vertically across 418px cells; largest-component centroid drift is about 63.8px horizontally and 27.8px vertically. Background is visually green in cells but the raw output includes white gutters/borders, and the green is not mathematically exact uniform `#00ff00`; only 2 exact `#00ff00` pixels were detected.
+- Status: complete.
+
+## 2026-07-07 - Elite Customer Success Department Boss Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless idle-loop animation grid for a Customer Success Director boss with headset mic, oversized smiling mask held beside face, and satisfaction-survey clipboard.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw byte-identical copy to `src/assets/generated/frame_tests/elite_cs_dept_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, cropping, or image cleanup was performed.
+- Verification: saved project copy is byte-identical to the generated source PNG.
+- Visual/drift check: all 9 cells show the same right-facing Customer Success Director boss with headset mic, oversized smiling mask, tired face, and satisfaction-survey clipboard. The mask rises and lowers while revealing the tired face, checkmarks tick onto the clipboard, and frame 8 returns close to frame 0 for looping. Estimated raw-cell full-foreground bbox center drift is about 23px horizontally and 7.5px vertically across 418px cells; foreground centroid drift is about 22.4px horizontally and 7.2px vertically; bottom-anchor drift is about 6px. Background is visually green but not mathematically exact uniform `#00ff00`; 0 exact `#00ff00` pixels were detected, with background-like median around `rgb(11,242,12)`.
+
+## 2026-07-07 - Midjourney Magenta-Rainbow Card Projectile Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop animation grid for a magenta-rainbow shimmer card projectile cycling hue magenta→purple→pink while spinning slowly with a dreamy sparkle trail.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw byte-identical copy to `src/assets/generated/frame_tests/proj_midjourney_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, cropping, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same right-facing magenta-rainbow shimmer card projectile with dark outline, slow spin stages, hue cycling from magenta through purple/pink, and sparkle trail phases. Frame 8 is visually close in design to frame 0 but sits higher/left because the bottom row is vertically offset. Estimated raw-cell largest-card-component bbox center drift is about 55.5px horizontally and 28.5px vertically across 418px cells; card centroid drift is about 50.0px horizontally and 28.2px vertically. Background is visually green but not mathematically exact uniform `#00ff00`; sampled edge values were roughly `rgb(8-32,236-248,9-28)`, with 0 exact `#00ff00` pixels detected.
+
+## 2026-07-07 - Gemini Violet Twin-Star Projectile Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop animation grid for a violet twin-star projectile with two four-point stars orbiting each other.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw byte-identical copy to `src/assets/generated/frame_tests/proj_gemini_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, cropping, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same compact violet twin-star projectile with two four-point stars orbiting around a shared center. Frame 8 is close to frame 0 for a seamless loop. Estimated raw-cell foreground bbox center drift is about 33px horizontally and 28px vertically across 418px cells; foreground centroid drift is about 29.3px horizontally and 57.8px vertically. Background is visually green but not mathematically exact uniform `#00ff00`; only 1 exact `#00ff00` pixel was detected in the raw PNG.
+
+## 2026-07-07 - Chip Sheet Raw 4x4 Icon Grid
+
+- Requested: use `~/.codex/skills/.system/imagegen/SKILL.md`; generate exactly one built-in `image_gen` image for a 4x4 grid of 16 different retro pixel-art rounded-square microchip icons on solid `#00ff00` cell backgrounds.
+- Target raw path: `src/assets/generated/frame_tests/chip_sheet_raw.png`.
+- Constraints: raw only; no slicing, chroma-key, resizing, or cleanup.
+- Context read: project-local `dcos/process.md` and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in `image_gen` image only.
+- Saved raw byte-identical copy to `src/assets/generated/frame_tests/chip_sheet_raw.png`.
+- Actual dimensions: 1254x1254 PNG.
+- No slicing, chroma-key removal, resizing, cropping, or image cleanup was performed.
+- Status: complete.
+
+## 2026-07-07 - Elite Product Management Department Boss Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless idle-loop animation grid for a Product Director boss with smart casual vest, giant roadmap scroll unrolled between hands, sticky notes orbiting, scroll unroll motion, sticky-note shuffle, and confident nod.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw byte-identical copy to `src/assets/generated/frame_tests/elite_pm_dept_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, cropping, or image cleanup was performed.
+- Verification: saved project copy is byte-identical to the generated source PNG.
+- Visual/drift check: all 9 cells show the same right-facing Product Director boss concept with smart casual vest, giant roadmap scroll, and orbiting sticky notes. The scroll unroll/roll-back, sticky-note shuffle, and confident head-nod stages are visible; frame 8 is close to frame 0 for loop return. Estimated raw-cell full-foreground bbox center drift is about 41.5px horizontally and 13.5px vertically across 418px cells; largest character/scroll component center drift is about 41.0px horizontally and 13.5px vertically; bottom-anchor drift is about 9px. Background is visually green but not mathematically exact uniform `#00ff00`; sampled corner values were roughly `rgb(5-9,244-247,15-18)`, with 0 exact `#00ff00` pixels detected.
+
+## 2026-07-07 - ChatGPT Teal Energy Orb Projectile Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop animation grid for a teal-green energy orb projectile with hexagonal knot core rotation and outer glow pulse.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw byte-identical copy to `src/assets/generated/frame_tests/proj_chatgpt_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, cropping, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same compact right-facing teal energy orb with dark outline, hexagonal knot core, rotating internal highlights, and pulsing outer glow. Frame 8 is visually close to frame 0 for a loop. Estimated raw-cell foreground bbox center drift is about 16.5px horizontally and 36.0px vertically across 418px cells; centroid drift is about 16.7px horizontally and 35.8px vertically, mainly because the bottom row sits higher than the top rows. Background is visually green but not mathematically exact uniform `#00ff00`; sampled edge values were roughly `rgb(14-35,238-247,10-26)`.
+
+## 2026-07-07 - One-Person-Company Player Walk Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop walk animation grid for the One-Person-Company persona player character.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw byte-identical copy to `src/assets/generated/frame_tests/player_opc_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, cropping, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same right-facing headset-and-business-vest OPC player character with three tiny overhead holographic app windows. Walk poses, arm swing, tie sway, and window flicker/orbit states are present, with frame 8 returning toward frame 0. Estimated raw-cell largest-character-component center drift is about 26.5px horizontally and 42px vertically across 418px cells; bottom-anchor drift is about 32px. Full foreground drift is affected by orbiting hologram windows/trails. Background is visually green but not mathematically exact uniform `#00ff00`; sampled edge background-like values ranged roughly `rgb(0-35,121-255,0-96)`, with 2 exact `#00ff00` pixels detected.
+
+## 2026-07-07 - Boss Roar Sound-Wave Burst Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 one-shot animation grid for an angry boss roar sound-wave burst.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_bossroar_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Verification: saved project copy is byte-identical to the generated source PNG.
+- Visual/drift check: frames progress from a small center shout spark through expanding jagged red arcs, maximum triple sound-wave burst with exclamation shards/spittle, thinning arcs, broken dashes, fading fragments, faint dots, and an empty final cell. Estimated raw-cell foreground bbox center drift across non-empty frames is about 6px horizontally and 27.5px vertically across 418px cells. Background is visually green but not mathematically exact uniform `#00ff00`; frame 8 is empty but its sampled green ranges roughly `rgb(9-32,243-250,7-20)`.
+
+## 2026-07-07 - Boss Golden Pie Blessing Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 one-shot raw animation grid for a giant golden painted-pie descending blessing boss skill.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_bosspie_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: frames progress from a small high halo, descending pie silhouette, bright pie with rays, maximum radiant pie with falling crumbs, translucent fade/scatter, shrinking halo, falling crumb sparkles, two sparkles, and an empty final cell. The main pie design is consistent in the full-pie phases. Estimated raw-cell foreground bbox center drift across non-empty frames is about 10.5px horizontally and 131.5px vertically across 418px cells, driven by the deliberate descent/fade sequence; the full-pie F2-F4 strong-foreground center drift is about 6.5px horizontally and 3.5px vertically. Background is visually green but not mathematically exact uniform `#00ff00`; sampled background values were roughly `rgb(3-8,245-249,1-10)`.
+
+## 2026-07-07 - Doubao Pink Bean Projectile Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop animation grid for a cute pink bean projectile tumbling head-over-tail.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw byte-identical copy to `src/assets/generated/frame_tests/proj_doubao_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same cute pink bean projectile with determined face rotating head-over-tail through a coherent loop. Estimated raw-cell foreground bbox center drift is about 42.5px horizontally and 22.5px vertically across 418px cells; foreground centroid drift is about 38.4px horizontally and 20.9px vertically. Background is visually green but not mathematically exact uniform `#00ff00`; sampled background-like pixels ranged roughly `rgb(1-72,151-255,0-74)` and no sampled pixels were exactly `#00ff00`.
+
+## 2026-07-07 - Elite Marketing Department Boss Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless idle-loop animation grid for a CMO marketing director boss with magenta blazer, megaphone, popping like/heart icons, sound arcs, and hair flip.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/elite_marketing_dept_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same right-facing CMO marketing director boss with magenta blazer, megaphone, floating like/heart icons, sound arcs, and hair-flip stages. The sequence reads as a shout/pop/burst/recover idle loop, with frame 8 close to frame 0. Estimated full-foreground bbox center drift is about 30px horizontally and 22px vertically across 418px raw cells; largest character/megaphone component center drift is about 44px horizontally and 22px vertically; bottom-anchor drift is about 20px. Background is visually green but not mathematically exact uniform `#00ff00`; thresholded background-like pixels ranged roughly `rgb(0-109,141-255,0-109)` and no exact `#00ff00` pixels were detected.
+
+## 2026-07-07 - Immortal Veteran Worker Player Walk Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop walk animation grid for the Immortal Veteran Worker persona player character.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/player_revival_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same right-facing Immortal Veteran Worker concept with yellow hard hat, cheek bandage, rolled sleeves, work pants, and dark boots. Heavy walk poses, lamp blink states, and dust puffs are present, with frame 8 reading as a loop-back pose toward frame 0. Estimated raw-cell largest-character-component center drift is about 85px horizontally and 32.5px vertically across 418px cells; bottom-anchor drift is about 31px. Including dust puffs, full foreground bbox center drift is about 117px horizontally and 32.5px vertically. Background is visually green but not mathematically exact uniform `#00ff00`; sampled background values were roughly `rgb(10-13,238-242,9-13)`, with 0 exact `#00ff00` pixels detected.
+
+## 2026-07-07 - Elite Legal Department Boss Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless idle-loop animation grid for a Legal Director boss with black robe-like suit, giant red seal stamp, and contract scrolls.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/elite_legal_dept_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same right-facing Legal Director boss concept with black robe-like suit, giant red seal stamp, and contract scrolls. The stamp raise/slam, red impact flash, and contract flutter stages are present, with frame 8 returning close to the idle pose. Estimated full-foreground bbox center drift is about 100px horizontally and 64px vertically across 418px raw cells, affected by the raised stamp, impact flash, and fluttering scrolls; darker lower-body/feet bottom-anchor drift is about 33px. Background is visually green but not mathematically exact uniform `#00ff00`; sampled background values were roughly `rgb(4-22,239-248,3-15)`.
+
+## 2026-07-07 - Fresh-Graduate Meat-Wall Summon Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless idle-loop animation grid for a fresh-graduate meat-wall summon: chubby determined intern in oversized suit holding a giant binder as shield.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/mob_opc_wall_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, cropping, or image cleanup was performed.
+- Verification: saved project copy is byte-identical to the generated source PNG.
+- Visual/drift check: all 9 cells show the same right-facing chubby intern in oversized suit with a giant binder shield. Binder height, sweat drop, and subtle foot-shuffle/bob stages are present; frame 8 is close to frame 0 for looping. Estimated raw-cell foreground bbox center drift is about 26.5px horizontally and 21.5px vertically across 418px cells; bottom-anchor drift is about 21px. Background is visually green but not mathematically exact uniform `#00ff00`; sampled corner colors were roughly `rgb(11-14,245-247,9-12)`.
+
+## 2026-07-07 - Elite CFO Department Boss Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 idle-loop animation grid for the CFO chief financial officer boss.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/elite_cfo_dept_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same right-facing CFO boss concept with pinstripe suit, golden abacus, red budget-cut scissors, and falling coin sparkles. The abacus-flick, scissor-snip, and sparkle stages are present and the final frame returns close to the base pose. Estimated largest foreground-component center drift is about 36.5px horizontally and 16px vertically across 418px raw cells; bottom-anchor drift is about 16px. Background is visually green but not mathematically exact uniform `#00ff00`; sampled background-like pixels were roughly `rgb(12-16,235-238,15-20)`.
+
+## 2026-07-07 - Data Annotator Player Walk Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop walk animation grid for the Data Annotator persona player character.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/player_rlhf_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same right-facing Data Annotator player character with dark hoodie, headphones around the neck, tired determined face, and giant red marking pen held like a sword. Walk-cycle leg/arm changes, red pen-tip glow, and hoodie-string bounce are present. Estimated raw-cell foreground bbox center drift is about 30px horizontally and 21.5px vertically across 418px cells; bottom-anchor drift is about 23px, with the bottom row sitting higher than the top rows. Background is visually green but not mathematically exact uniform `#00ff00`; sampled background values were roughly `rgb(14-17,242-245,14-17)`.
+
+## 2026-07-07 - Wenxin Golden Pie Disc Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop animation grid for a golden glowing pie disc spinning like a coin with crumb sparkle trail.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/proj_wenxin_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: the 9 frames show a coherent golden pie-disc coin spin with crumb sparkles; frames 2 and 7 are edge-on, and frame 8 is an oval return phase into frame 0. Estimated largest-disc-component center drift is about 45px horizontally and 62.5px vertically across 418px raw cells, mainly because the bottom row sits higher than the top row. Including crumb sparkles, foreground bbox center drift is about 59px horizontally and 62.5px vertically. Background is visually green but not mathematically exact uniform `#00ff00`; edge samples were around `rgb(14-16,240-243,13-16)`.
+
+## 2026-07-07 - Boss Desk-Slam Shockwave Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 one-shot animation grid for a boss desk-slam shockwave attack.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_bossslam_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: frames progress from two fists hitting the ground through expanding shockwave rings, floor cracks, paper sheets, coffee splash, settling dust, and an empty final cell. The fist design is consistent across non-empty frames, but the whole foreground envelope shifts because the maximum shockwave/paper burst is much wider/taller than the later fade frames. Estimated non-empty raw-cell bounding-box center drift is about 33px horizontally and 64.5px vertically across 418px cells. Background is visually green but not mathematically exact uniform `#00ff00`; sampled values had no exact `#00ff00` matches.
+
+## 2026-07-07 - OPC Purple Digital Clone Worker Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless-loop walk animation grid for a purple digital clone worker summon with glitch jitter on frames 3 and 7.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/mob_opc_clone_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same right-facing purple digital clone office worker with consistent outfit, neon outline, and walk-cycle leg/arm stages. Frames 3 and 7 include the requested displaced pixel glitch artifacts. Estimated raw-cell foreground bbox center drift is about 52.5px horizontally and 23.5px vertically across 418px cells; bottom-anchor drift is about 25px, with the bottom row sitting slightly higher. Background is visually green but not mathematically exact uniform `#00ff00`; sampled corner colors were roughly `rgb(7-10,240-242,5-8)`.
+
+## 2026-07-07 - Qwen Shotgun Pellet Cluster Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 seamless loop animation grid for a compact orange shotgun pellet cluster.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/proj_qwen_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same compact three-bean orange pellet cluster tumbling through a loop. Estimated raw-cell foreground bounding-box center drift is about 20px horizontally and 37px vertically across 418px cells; bottom-row frames sit higher than top-row frames. Background is visually green but not mathematically exact uniform `#00ff00`; sampled background values ranged roughly `rgb(12-15,247-249,11-15)`.
+
+## 2026-07-07 - Legendary Weapon Fusion Burst Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 animation grid for a legendary weapon fusion burst one-shot VFX.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_fusion_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: the sequence reads as a gold-purple legendary weapon fusion burst, with rings, maximum starburst, weapon silhouette, sparkle shower, sparse sparkles, and an empty final cell. The main F1-F5 foreground bbox center drift is about 15px horizontally and 12.5px vertically across 418px raw cells; all non-empty frames drift about 16px horizontally and 22.5px vertically. F0 is less ideal because the two incoming chips are not both clearly contained as a pair in the same cell. Background is visually green but not exact uniform `#00ff00`; sampled corners were around `rgb(17-23,236-242,12-16)` and F8 center was `rgb(4,247,6)`.
+
+## 2026-07-07 - Slacker Artist Player Walk Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for the slacker artist persona player walk cycle.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/player_slacker_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same right-facing relaxed slacker artist with Hawaiian shirt, sunglasses on head, one hand in pocket, and phone in the other hand. Lazy walk poses, shirt sway, and phone-screen flicker are present, and frame 8 reads as a loop-back pose toward frame 0. Estimated raw-cell foreground bbox center drift is about 30px horizontally and 15px vertically across 418px cells; bottom/feet anchor drift is about 17px. Background is visually solid green but not mathematically exact `#00ff00`; sampled background corners ranged roughly `rgb(9-14,244-248,11-16)`.
+
+## 2026-07-07 - Elite CTO Department Boss Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one raw 3x3 idle-loop animation grid for the CTO chief technology officer boss.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/elite_cto_dept_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254 RGB PNG.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 cells show the same right-facing CTO boss concept with gray hoodie, glasses, keyboard shield, and floating code windows. The typing highlights, code scroll, and glasses glint vary across frames as requested. The background is visually green but not mathematically uniform `#00ff00` (only one sampled pixel matched exactly). Estimated raw-cell foreground bbox center drift is about 16.5px horizontally and 6.5px vertically across 418px cells; frame 8 is close to the base pose but sits slightly left/lower versus frame 0.
+
+## 2026-07-07 - OPC Contractor Hologram Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a right-facing translucent light-blue hologram contractor worker walk loop.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/mob_opc_contractor_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: the 9 frames show the same right-facing light-blue hologram contractor worker with hardhat, badge lanyard, scanlines, and walk-loop leg/arm changes. Estimated raw-cell cyan/outline bounding-box center drift is about 27px horizontally and 13px vertically across 418px cells; bottom-anchor drift is about 15px, with the bottom row sitting slightly higher. Background is visually green but not mathematically exact uniform `#00ff00`; sampled edge values were roughly `rgb(11-14,236-240,5-8)`.
+
+## 2026-07-07 - Kimi Cyan Light-Arrow Sniper Bolt Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only; generate one raw 3x3 animation grid for a long cyan right-facing light-arrow sniper bolt with front-to-back rippling afterglow loop.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/proj_kimi_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: the 9 frames show a consistent right-facing cyan light-arrow sniper bolt with the glow ripple moving front-to-back and returning toward the front for the loop. Estimated raw-cell foreground bounding-box center drift is about 8.5px horizontally and 29.5px vertically across 418px cells, with lower-row frames sitting slightly higher than the top row. Background is visually green but not mathematically exact uniform `#00ff00`; sampled corner colors ranged roughly `rgb(3-5,247-249,2-5)`.
+
+## 2026-07-07 - HR Enforcer Minion Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for an idle-loop HR Enforcer minion.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/elite_hr_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: the 9 frames show the same HR enforcer with clipboard, pen, badge, blazer, and right-facing stance. Pen tap, badge glint, collar-adjust, and side-glance stages are present. Estimated raw-cell bounding-box center drift is about 13.5px horizontally and 11px vertically across 418px cells; bottom-anchor drift is about 11px. Background is visually green but not mathematically exact uniform `#00ff00`; sampled edge values were roughly `rgb(2-27,238-252,1-17)`.
+
+## 2026-07-07 - Persona Portrait/Card Icon 3x3 Raw Sheet
+
+- Requested: use `~/.codex/skills/.system/imagegen/SKILL.md`; generate one raw 3x3 grid of 9 different retro pixel-art game icons/subjects; save raw only to `src/assets/generated/frame_tests/portrait_sheet_raw.png`; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md` and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/portrait_sheet_raw.png`, leaving the default generated original in place.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, resizing, or image cleanup was performed. Note: the generation prompt requested a 1024x1024 canvas, but the built-in tool returned 1254x1254; the raw output was preserved as generated.
+
+## 2026-07-07 - Deepseek Energy Bullet Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a tiny deep-blue energy bullet with a whale-tail wisp, pulsing bright-dim as a seamless machine-gun projectile loop.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/proj_deepseek_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all 9 frames show the same right-facing blue bullet/wisp design with a clear bright-dim-bright pulse. Foreground x-position is very stable; measured raw-cell bounding-box center drift is about 2px horizontally and 26px vertically across 418px cells, with the bottom row shifted upward relative to the first two rows. Background is visually green but not mathematically exact uniform `#00ff00`; sampled corner colors ranged roughly `rgb(7-11,245-249,6-12)`.
+
+## 2026-07-07 - Cost-Cutting Executive Player Walk Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for the cost-cutting executive persona player walk cycle.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/player_optimizer_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: all nine cells show the same right-facing cost-cutting executive design with black suit, red tie, slick hair, and red KPI tablet. Walk poses alternate legs, tie sway, and tablet glow; the loop reads as a coherent strut. Background is visually green but not exact uniform `#00ff00`; sampled corners are around `#08f507` to `#1aef12`, with no sampled pixels exactly `#00ff00`. Estimated raw-cell drift: foreground bounding-box centers range about 34px horizontally and 27.5px vertically across 418px cells; bottom/feet anchor ranges about 30px.
+
+## 2026-07-07 - Status Icon 3x3 Raw Sheet
+
+- Requested: use `~/.codex/skills/.system/imagegen/SKILL.md`; generate one raw 3x3 grid of 9 different retro pixel-art status icons; save raw only to `src/assets/generated/frame_tests/status_sheet_raw.png`; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md` and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/status_sheet_raw.png`, leaving the default generated original in place.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, resizing, or image cleanup was performed. Note: the generation prompt requested a 1024x1024 canvas, but the built-in tool returned 1254x1254; the raw output was preserved as generated.
+
+## 2026-07-06 - Spinning Paper Projectile Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for an A4 document sheet spinning like a thrown shuriken projectile.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/proj_paper_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: frames show a white paper sheet rotating through the loop, with edge-on frames at F2 and F7. The middle-center frame appears more like a doubled/stacked sheet than a single clean sheet. Background is visually green but not exact uniform `#00ff00`; sampled background-like pixels ranged roughly `rgb(0-95,135-255,0-79)` and no sampled pixels were exactly `#00ff00`. Estimated raw-cell drift: foreground bounding-box centers range about 38px horizontally and 21.5px vertically across 418px cells.
+
+## 2026-07-06 - Revival Burst VFX Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a golden revival burst / N+1 comeback VFX.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_revive_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: frames progress from golden seed to unfolding wings, wide wings with halo, maximum halo/pillar, dissolving feathers, scattered feathers, faint sparkles, and an empty final cell. Estimated raw-cell foreground center drift across non-empty frames is about 18.5px horizontally and 130px vertically; the more relevant bottom-anchor drift is about 23.5px horizontally and 58.5px vertically across 418px cells. The final cell is empty. Background is visually green but not exact uniform `#00ff00`; sampled F8 values range roughly `rgb(1,245,1)` to `rgb(17,251,11)`.
+
+## 2026-07-06 - Thrown Coffee Mug Projectile Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a looping coffee mug thrown-projectile tumble.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/proj_mug_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: the sequence reads as a white mug with red heart and coffee/droplet pixels rotating through the loop. Background is visually green but not exact uniform `#00ff00` (corner samples around `#22ee1b` to `#26ee21`). Estimated drift: foreground bounding-box centers range about 62.5px horizontally and 55.5px vertically; foreground centroids range about 57.3px horizontally and 47.0px vertically, with lower-row frames sitting visibly higher in their cells.
+
+## 2026-07-06 - Awakening Evolution Burst VFX Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a purple awakening evolution burst VFX.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_evolution_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: frames progress from rune circle to vertical beam, white-core pillar, maximum purple pillar with shards, ribbons, sparkles, faint afterglow ring, and empty final cell. The base/ring anchor is horizontally close but shifts left in the wider beam/sparkle frames by roughly 24 raw pixels across 418px cells; the full effect envelope shifts vertically about 154 raw pixels because beam height and sparkle spread change by frame. The final cell is empty. The background is visually green but not exact uniform `#00ff00`; sampled empty-cell values are mostly around `rgb(12,248,5)`.
+
+## 2026-07-06 - Coffee Steam Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a coffee machine steam loop VFX with no cup/machine.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_coffee_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/drift check: frames show the requested steam puff progression, but the background is generated green rather than exact uniform `#00ff00` (sampled colors around `rgb(6-8,248-249,6-7)`). Estimated raw-cell drift: bottom-origin horizontal drift about 13px; bottom-origin vertical drift about 36px, with F8 visibly higher than F0, so the loop is close in shape but not perfectly seamless.
+
+## 2026-07-06 - Critical Hit VFX Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a critical-hit star burst VFX.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_crit_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, or resizing was performed.
+- Visual/drift check: frames progress from red-orange dot to 4-point flare, larger outlined star, maximum 8-point burst, rotated shrink, 4 diagonal shards, fading trails, two faint sparks, and empty final cell. The effect remains horizontally stable; non-empty frame bounding-box centers drift about 12px horizontally and 17.5px vertically within raw 418px cells, with the overall anchor consistently about 12-29px above the mathematical cell center. The background appears visually uniform green, but sampled pixels are not exact `#00ff00` and are mostly around `rgb(12,244,13)`.
+
+## 2026-07-06 - Pickup Glint VFX Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a loot pickup glint VFX.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_pickup_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, or resizing was performed.
+- Visual/drift check: frames progress from tiny dot, 4-point twinkle, cyan-ring maximum, expanding/thinning ring, rising sparkles, fading sparkles, to empty final cell. Non-empty frame bounding-box centers range about 13.5px horizontally and 81.5px vertically across raw 418px cells; the large vertical range is mainly the intended rising-sparkle tail in F5-F7. Main early frames F0-F4 stay within about 10px horizontally and 24.5px vertically. The final cell is empty. Background is green but not mathematically exact uniform `#00ff00`; sampled background-like pixels range R 0-74, G 209-255, B 0-79.
+
+## 2026-07-06 - Summon Flash Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a blue summon-arrival flash VFX.
+- Context read: this process file plus the pixel-animation-grid and imagegen skill instructions were read before generation.
+- Generated with one built-in image_gen call only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_summon_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, resizing, or image cleanup was performed.
+- Visual/check notes: the 9 stages are present and F8 is empty. Background is green but not exact uniform `#00ff00` (dominant values are around `rgb(16-17,246-247,17-19)`). Estimated frame drift: F2 and F5 are about 20px left of the earlier ring centers; later ring/spark frames also sit visibly higher than F0.
+
+## 2026-07-06 - Nuke VFX Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a huge pixel mushroom-cloud explosion VFX.
+- Context read: this process file plus the `pixel-animation-grid` and `imagegen` skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_nuke_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, or resizing was performed.
+- Visual/drift check: frames progress from flash to fireball, mushroom cap, smoke, sparse embers, and wisps; backgrounds appear uniformly green. Pixel bounds show base drift around 26.5px horizontally and 22px vertically across the raw 418px cells, with the dissipating smoke/wisp frames drifting right-to-left more visibly than the main blast frames.
+
+## 2026-07-06 - Dash VFX Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for a right-pointing horizontal speed-dash streak burst.
+- Context read: this process file and the pixel-animation-grid/imagegen skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/fx_dash_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, or resizing was performed.
+- Visual check: the sequence reads correctly from thin start lines through maximum cyan/white burst, fragmentation, fading wisps, and an empty final cell. Vertical centerline is mostly stable; late wisps sit slightly higher by roughly 7-14 raw pixels. Early/final short wisps are horizontally left-biased compared with the maximum burst, while the wide non-empty frames remain flat and right-pointing. The green background appears mostly solid but has mild generated shading/variation rather than perfectly mathematical #00ff00.
+
+## 2026-07-06 - Boss Idle Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only, and generate one 3x3 raw animation grid for the final boss `老板`.
+- Context read: this process file and the pixel-animation-grid/imagegen skill instructions were read before generation.
+- Generated one built-in image_gen image only.
+- Saved raw copy to `src/assets/generated/frame_tests/boss_idle_anim_3x3_raw.png`.
+- Actual dimensions: 1254x1254.
+- No slicing, chroma-key removal, or resizing was performed.
+- Visual check: the boss remains broadly consistent across the 9 cells, with intended mug sip, phone glow, foot tap, and tie-adjust actions. Minor drift remains in limb pose/width and phone/mug offsets; the background appears visually uniform green.
+
 ## 2026-07-05 - Game Review And Next Development
 
 - Requested: review current game, choose the highest-priority next task from new system, balance tuning, more existing-content, or self-decided direction; then develop and test.
@@ -520,3 +953,224 @@
   - #levelup-cards 允许换行（flex-wrap + min-width 158px）：窄窗 5 选 1 自动 2-3 张/行或单列，不再挤成竖条。
   - 人设 intro 新增两个入口：🎲 听天由命（随机 pickLevelChoice）；🫥 先不站队（snoozePersonaIntro：本次改出**纯通用卡池**——buildDraftPool 过滤全部人设卡，否则混合池随手一张人设卡就锁定，按钮形同虚设；下次升级重新提供 5 选 1）。
 - Verification: 引擎断言——电梯全局走表（nextRing 44.8→43.8）、站上 71 帧开门、72 帧传送 883px 到另一台 ✅；先不站队全链路（5选1→3张纯通用→选卡不锁人设→下次升级重现5选1）✅；窄窗截图确认按钮与换行渲染 ✅；npm run build 通过。
+
+## 2026-07-06 - Explosion FX 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for a one-shot retro pixel-art explosion VFX; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md` after absolute `/dcos/process.md` was unavailable, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output to `src/assets/generated/frame_tests/fx_explosion_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: frame progression reads correctly from spark to dissipating smoke, but the green background is not exact uniform `#00ff00` (dominant colors around `#08f20c`), and the non-green bounding-box centers drift up to about 22.5px horizontally and 24.5px vertically across cells.
+
+## 2026-07-06 - Bullet Impact Spark 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for a compact bullet-impact spark one-shot burst; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output to `src/assets/generated/frame_tests/fx_spark_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. Visible drift: burst center is broadly stable across cells, but the green background has soft variation instead of perfectly uniform pure `#00ff00`; no slicing, chroma-key removal, or resizing was performed.
+
+## 2026-07-06 - Slash Arc 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for a same-center melee crescent slash-arc one-shot sweep; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output to `src/assets/generated/frame_tests/fx_slash_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. Visible drift: large crescent frames 2-5 are broadly aligned, but the full sequence does not perfectly preserve one locked center/radius; frame 6 shifts lower, and frames 0-1/7-8 are sparse/fading segments with visibly different local placement. Background is green but has soft variation instead of perfectly uniform pure `#00ff00`. No slicing, chroma-key removal, or resizing was performed.
+
+## 2026-07-06 - 纯随机流重定义 + 武器特效帧动画（fx_explosion / fx_spark / fx_slash）
+
+- Requested: ①"纯随机"应指彻底不要人设——不锁定、全卡池混抽、整到啥用啥（上一版的"随机分配一个人设"理解有误）；②武器/技能视觉效果不佳，希望用 pixel-animation-grid 做动态特效。
+- Implemented:
+  - 纯随机流（personaFree）：人设 5 选 1 界面的 🎲 按钮改为开启本局纯随机——永不锁人设（pickLevelChoice 锁定门加 !personaFree）、intro 不再弹出、全人设卡池混抽、里程碑改为从全部 15 条 track 随机抽 3 条；暂停档案显示「自由人 · 纯随机流」。
+  - 特效帧动画：按 pixel-animation-grid 两阶段流程生成 3 组 9 帧 VFX——fx_explosion（火花→火球→空心环→烟散，接管全部 boom 类爆炸并保留原技能色细环）、fx_spark（子弹命中火花，updateProjs 命中处新增 spark fx，nearPlayer 限流）、fx_slash（月牙挥砍轨迹，按挥击角旋转，接管键盘/手套 slash）。render.js 新增 FX_ANIM 加载器 + fxFrame(进度取帧)，素材缺失时逐绘制点回退原程序化图形。
+- Verification: 纯随机流全链路引擎断言 ✅（专挑人设卡连抽 10 次不锁、五系卡混出、里程碑随机三条 revival+rlhf+optimizer 混排、intro 不再现）；27 帧 VFX 切片零坏帧（spark 首尾帧近全透明为设计使然）；画布采样确认爆炸帧实际绘制（白核 83 + 暖色 263 像素）；真实 UI 截图确认两个新按钮渲染；npm run build 通过；控制台零 error。
+- Note: 特效素材同走 generated/ drop-in 管线（fx_<name>_f0..f8），后续可按同法补枪口焰/受击闪/治疗光环等。
+
+## 2026-07-06 - Elite Hallu Boss 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for 「一本正经胡说八道的专家」, a pale-purple ghost consultant boss idle loop with smoke sway, wispy tail undulation, glitching nonsense report chart, and independently drifting eyes; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output to `src/assets/generated/frame_tests/elite_hallu_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: the character design, colors, right-facing angle, suit, report, and eye/report/tail animation are broadly consistent, but the green background has soft variation instead of perfectly uniform `#00ff00`; non-green bbox centers drift by about 54px horizontally and 13px vertically across cells, with the layout trending leftward in later columns.
+
+## 2026-07-06 - Muzzle Flash FX 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for a tiny right-pointing gun muzzle-flash one-shot VFX; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output to `src/assets/generated/frame_tests/fx_muzzle_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: sequence reads from pinprick to cross, cone, sparks, smoke, fading pixels, and empty final frame; background is green but has soft variation instead of exact uniform `#00ff00`; flame-source frames F0-F4 have about 9px left-edge drift and 7.5px vertical-center drift, while all non-empty frame bbox centers span about 120.5px horizontally and 22px vertically because the cone and sparks intentionally move rightward.
+
+## 2026-07-06 - Shield Break FX 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for a blue energy shield shattering one-shot VFX; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md` after absolute `/dcos/process.md` was unavailable, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/fx_shieldbreak_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: shield-break progression reads correctly from intact bubble to empty frame; frame 8 has no detected foreground; green background is not exact uniform `#00ff00` (corner samples around `(10, 241, 15)`), and detected foreground centers drift about 14.3px horizontally and 24.7px vertically across non-empty frames.
+
+## 2026-07-06 - Elite PPT Boss 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for `PPT 路演大魔王`, a white-suit showman executive boss with floating presentation slide and laser pointer; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the correct raw output byte-identically to `src/assets/generated/frame_tests/elite_ppt_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: idle loop reads as pointer click, chart flip, laser sweep, pose, and glow pulse; green background has soft variation instead of perfectly uniform pure `#00ff00`; character and slide are broadly consistent, but pose/anchor/slide bbox centers drift about 14.5px horizontally and 33.5px vertically across cells.
+
+## 2026-07-06 - Execution Slash FX 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for a dramatic red execution slash mark VFX, from thin diagonal flash through red X impact to empty final frame; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/fx_execute_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible drift: frame progression reads correctly from thin slash to bold white-core red X, dim outlines, center glow, faint afterimage, and empty final frame; green background has visible soft variation instead of perfectly uniform pure `#00ff00`; X/slash anchors are broadly stable in frames 2-5, while the bottom-row center-glow/afterimage frames sit slightly above the nominal cell center.
+
+## 2026-07-06 - Heal Sparkle FX 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for a pure healing sparkle burst VFX, from a tiny green cross through rising crosses/ring/sparkles to an empty final frame; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output to `src/assets/generated/frame_tests/fx_heal_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: sequence reads from tiny cross to multi-cross glow ring, fading sparkles, and empty final frame; effect x-center stays within about 12.5px across non-empty cells, while bbox y-center changes by about 184px as expected for the rising one-shot. Background is green but has soft variation instead of perfectly uniform pure `#00ff00`.
+
+## 2026-07-06 - Elite Upman Boss 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for 「向上管理大师」, a right-facing slick middle-manager boss with a golden UP arrow, badge-polish, thumbs-up sparkle, and hair-shine idle loop; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output to `src/assets/generated/frame_tests/elite_upman_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: character design, right-facing angle, suit, smile, thumbs-up, badge, and golden arrow are broadly consistent, but background green has soft variation instead of exact pure `#00ff00`; full non-green bbox centers drift about 36.5px horizontally and 37.5px vertically across cells, partly from intended arrow bob/glow and sparkle/hair highlights.
+
+## 2026-07-06 - Elite Overfit Boss 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for 「竞争壁垒专家」, a massive binder-armored bureaucrat boss idle loop with heavy breathing, binder-plate clinks, and fist-pound dust; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/elite_overfit_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: brick-wall bureaucrat design, binder armor, badge, cyan chest panel, red layoff stamp, and fist-pound beat are broadly consistent; background green has soft variation instead of exact pure `#00ff00` with corner samples around `(20, 241, 13)`; foreground bbox centers drift about 23.0px horizontally and 17.5px vertically across cells.
+
+## 2026-07-06 - Elite Snitch Boss 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for 「小报告专家」, a right-facing sneaky thin clerk boss in a trench coat clutching report memos, with shifty eyes, whisper hand, speech-bubble pulse, memo shuffle, and coat-collar twitch; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/elite_snitch_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: boss design, right-facing angle, trench coat, memo stack, whisper hand, eye darting, and speech-bubble animation are broadly consistent, but background green is close to pure green rather than exact `#00ff00` (corner means around `(4, 248, 4)`); full non-green bbox centers drift about 91.5px horizontally and 25px vertically across cells, partly from the appearing speech bubble and shuffled memo stack, with visible anchor differences between columns/rows.
+
+## 2026-07-06 - Teleport Swirl FX 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for a pure cyan teleport swirl VFX from small dot ring through vortex, implosion flash, fading pixels, and empty final frame; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/fx_teleport_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: frame progression reads correctly from dot/ring to expanded ring, spiral buildup, maximum vortex, collapse, implosion flash, two remnant pixels, and empty final frame; background green has soft variation instead of exact pure `#00ff00` (corner samples around `(17, 247, 20)`); non-green bbox centers drift about 10.0px horizontally and 27.5px vertically across non-empty frames, with the compact flash/remnant frames sitting slightly higher than the main vortex frames.
+
+## 2026-07-06 - Level-Up Promotion Burst FX 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for a pure golden promotion/level-up burst VFX, from thin center-bottom beam through max white-core gold pillar, rising stars/confetti, and final single sparkle; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/fx_levelup_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: the sequence reads correctly from thin beam to full beam, wide white-core/gold-edge pillar, rising stars/confetti, fading stars, and final sparkle; background green is not exact uniform `#00ff00` (corner samples around `(17, 240, 15)` and `(18, 243, 13)`); detected foreground bbox centers span about 41px horizontally across cells, with vertical center changes dominated by the intended rising/fading one-shot stages.
+
+## 2026-07-06 - Elite Injector Boss 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for 「忽略老板指令的外包同学」, a hooded freelancer boss with a chest laptop, sideways typing, purple code flashes, glance/hood sway, and syringe-shaped USB lanyard; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the correct reported raw output byte-identically to `src/assets/generated/frame_tests/elite_injector_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: character design, purple hoodie, chest laptop, typing poses, right-facing angle, and syringe USB lanyard are broadly consistent; background green is not exact uniform `#00ff00` (corner samples around `(26, 238, 17)` and `(26, 242, 15)`, exact pure green about 0.0001%); foreground bbox centers drift about 34.5px horizontally and 11px vertically across cells, partly from lanyard/USB swing and typing pose; feet clear the raw cell bottom by about 21-32px rather than the requested 2px.
+
+## 2026-07-06 - Office Item 4x4 Raw Icon Sheet
+
+- Requested: use `~/.codex/skills/.system/imagegen/SKILL.md`; generate one raw 4x4 grid of 16 different retro pixel-art office-satire item icons; save raw only to `src/assets/generated/frame_tests/item_sheet_4x4_raw.png`; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md` and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and saved a raw copy to `src/assets/generated/frame_tests/item_sheet_4x4_raw.png`, leaving the default generated original in place.
+- Verification: saved PNG is 1254x1254 RGB. No slicing, chroma-key removal, or resizing was performed. Note: the generation prompt requested a 1024x1024 canvas, but the built-in tool returned 1254x1254; the raw output was preserved as generated.
+
+## 2026-07-06 - Elite Meeting Boss 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for 「会议邀请官」, a calendar-headed officer boss holding glowing meeting invites, with page flip, invite hover, red-circle pulse, and gentle body-rock idle loop; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/elite_meeting_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible drift: calendar-officer design, right-facing angle, suit, badge, invite stack, page flip, invite hover, and red-circle pulse are broadly consistent; background green has soft variation instead of exact uniform `#00ff00`; character anchor/pose drifts slightly between cells, and page-flip/invite-glow shapes vary beyond pure pixel-pose changes.
+
+## 2026-07-06 - Elite Intern Boss 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for 「卷王实习生」, a fired-up intern boss with red exercise headband, binder-stack dumbbells, eye flames, flying sweat, and swinging badge idle loop; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/elite_intern_anim_3x3_raw.png`.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: character design, right-facing angle, headband, binder dumbbells, badge, pumping pose, eye-flame flicker, and sweat-drop motion are broadly consistent; background green has soft variation instead of exact uniform `#00ff00` (corner means around `(10-12, 246-247, 9-10)`, exact pure green about 0.0003%); detected foreground bbox centers drift about 32.5px horizontally and 21.0px vertically across cells; feet clear the raw cell bottom by about 26-46px rather than the requested 2px.
+
+## 2026-07-06 - Elite Legal Red-Line Boss 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for 「法务红线老师」, a stern right-facing legal officer holding a glowing red tape barrier, with tape vibration/glow pulses, weight shift, glasses glint sweep, and snap-taut idle loop; do not slice, chroma-key, or resize.
+- Context read: attempted absolute `/dcos/process.md` first but it was unavailable, then read project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/elite_align_anim_3x3_raw.png`, leaving the default generated original in place.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: legal-officer design, right-facing angle, suit, badge, glasses, and red tape barrier are broadly consistent; animation reads as tape vibration/glow pulse plus glasses sweep; background green has soft variation instead of exact uniform pure `#00ff00` with corner samples around `(6, 248, 6)`; foreground bbox centers drift about 14px horizontally and 18.5px vertically across cells; feet clear the raw cell bottom by about 36-53px rather than the requested 2px.
+
+## 2026-07-06 - Elite Attendance Boss 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md` Phase 1 only; generate one raw 3x3 image grid for 「考勤点名官」, a strict right-facing proctor boss with clipboard, chest stopwatch, pen tap, glare glint, and occasional clipboard raise; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/elite_attendance_anim_3x3_raw.png`, leaving the default generated original in place.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: character design, suit palette, stopwatch, pen, stern glare, and right-facing angle are broadly consistent and the stopwatch hand visibly ticks, but background green has soft variation instead of exact uniform pure `#00ff00` (corner mean around `(12.4, 246.3, 10.0)`, exact pure green about 0.0004%); the clipboard disappears in a couple of cells instead of staying identical; detected foreground bbox centers drift about 33.5px horizontally and 26.5px vertically across cells; feet clear the raw cell bottom by about 19-46px rather than the requested 2px.
+
+## 2026-07-06 - 素材大扩充（特效 ×6 / 精英立绘 ×10 / 老板待机 / 道具图标 ×15）
+
+- Requested: 用户批准"丰富素材，不要怕浪费 Token"。
+- Implemented（18 个生成任务，4 路并行 codex exec，全走 pixel-animation-grid 两阶段管线）：
+  - 新特效 6 组九帧：fx_muzzle 枪口火焰（开火时沿准星方向）、fx_heal 治疗绿光（回血豆/咖啡机）、fx_levelup 升职金柱星星、fx_shieldbreak 破盾六角碎裂、fx_execute 处决红 X、fx_teleport 传送漩涡（闪现/电梯两端）；drawFx 新增对应分支，core.js 在开火/回血/升级/破盾/处决/传送处发射，素材缺失静默回退。
+  - 精英专属立绘 10 只 ×9 帧待机动画（原来全是换色工人）：PPT 路演大魔王/向上管理大师/小报告专家/会议邀请官/卷王实习生/考勤点名官/一本正经胡说八道的专家/竞争壁垒专家/忽略老板指令的外包同学/法务红线老师；render.js ELITE_ANIM 覆盖（tier2 30px、overfit 34px、tier1 24px）。
+  - 老板九帧待机（喝咖啡/看手机/整理领带微动作循环），boss_idle 覆盖 HIFI 双帧。
+  - 消耗品专属图标 15 张（4×4 库图一次生成后按 id 切片重命名 item_<id>.png）：冰美式/红牛/期权/N+1/奶茶/画的饼/双倍卡/重置卡/2N/简历刷新/工伤单/病假条/降噪耳机/充电宝/补给袋；pickups 渲染优先用图标。
+  - fx_heal 生成的消散偏早（f5 起全空），发射端 life 0.5→0.38 匹配。
+- Verification: 195 个新文件全部落盘（fx 81 帧 + elite 90 帧 + boss 9 帧 + item 15 图标），透明校验仅特效首尾"空帧"符合一次性动画设计；npm run build 通过；游戏内放大镜实拍确认：PPT 大魔王/向上管理/小报告立绘 + 升职金柱最大帧 + 画的饼与 N+1 图标同屏渲染 ✅；控制台零 error。
+- Debug note: 展台摆拍时假单位缺 spdBase 导致 speedOf NaN 坐标飞失——真实单位不受影响（spawnElite/spawnMob 均设置 spdBase）。
+
+## 2026-07-06 - Office Floor Decal 3x3 Raw Sheet
+
+- Requested: use `~/.codex/skills/.system/imagegen/SKILL.md`; generate one raw 3x3 grid of 9 different muted retro pixel-art floor decals for an office-satire top-down game; save raw only to `src/assets/generated/frame_tests/decal_sheet_3x3_raw.png`; do not slice, chroma-key, or resize.
+- Context read: project-local `dcos/process.md` and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Plan: use built-in `image_gen` exactly once, then copy the raw generated PNG byte-for-byte to the requested workspace path and report actual dimensions.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/decal_sheet_3x3_raw.png`, leaving the default generated original in place.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Note: the generation prompt requested a 1024x1024 canvas, but the built-in tool returned 1254x1254; the raw output was preserved as generated.
+
+## 2026-07-06 - Hurt Splash 3x3 Raw Animation Grid Phase 1
+
+- Requested: follow `~/.codex/skills/pixel-animation-grid/SKILL.md`, Phase 1 only; generate one raw 3x3 image grid for a one-shot player-damage red impact splash VFX; save raw only to `src/assets/generated/frame_tests/fx_hurt_anim_3x3_raw.png`; do not slice, chroma-key, or resize.
+- Context read: attempted absolute `/dcos/process.md` first but it was unavailable, then read project-local `dcos/process.md`, `~/.codex/skills/pixel-animation-grid/SKILL.md`, and `~/.codex/skills/.system/imagegen/SKILL.md`.
+- Implemented: used built-in `image_gen` exactly once and copied the raw output byte-identically to `src/assets/generated/frame_tests/fx_hurt_anim_3x3_raw.png`, leaving the default generated original in place.
+- Verification: saved PNG is 1254x1254 RGB and byte-identical to the generated raw output. No slicing, chroma-key removal, or resizing was performed. Visible/measured drift: F0-F3 main impact bbox centers drift about 7.0px horizontally and 10.5px vertically within raw 418px cells; all non-empty frame bbox centers drift about 22.0px horizontally and 95.0px vertically, mostly from the requested falling droplets in F4-F7. F8 is empty. Background is green but has generated variation instead of exact uniform pure `#00ff00` (sampled green average around `(12.1, 248.5, 15.2)`).
+
+## 2026-07-06 - HR 击杀反馈 / 受击闪光重做 / 素材第三轮 / 武器平衡基准
+
+- Requested: ①击杀老板小兵似乎没统计；②老板受击的透明浮层难看；③继续加大特效素材；④武器平衡不佳。
+- Implemented:
+  - HR 击杀：实测确认引擎一直在计数（G.kills 0→1 ✅），根因是击杀播报把 isHR 完全排除、毫无反馈——补「✂️ 优化了老板的走狗 xxx」高亮播报。
+  - 受击闪光重做：原是整张贴图矩形半透明白块（128px 帧素材上是一大块白浮层），改为 ctx.filter='brightness(0) invert(1)' 按精灵剪影闪白。
+  - 素材第三轮（12 个生成任务）：fx_nuke 蘑菇云（四种核爆共用）、fx_crit 暴击星芒、fx_hurt 玩家受击溅射、fx_dash 冲刺残影（按方向旋转拖尾）、fx_pickup 拾取闪光（chip/模组）、fx_evolution 觉醒紫柱、fx_revive 复活金翼（三处复活共用）、fx_summon 召唤上岗蓝圈（OPC+AI 替身）、fx_coffee 咖啡机蒸汽循环（有存货才冒气）、proj_mug/proj_paper 九帧旋转弹道贴图（马克杯/文件类子弹）、decal×9 地面贴花（咖啡渍/散落文件/线缆等，每局撒 46 个）。发射点 12+ 处、drawFx 查表分支、drawProj/drawProp 贴图钩子、newGame 贴花生成。
+  - 武器平衡：搭建满级 DPS 基准（6 厚血靶串糖葫芦、120px 瞄准、12 秒、蓄力兼容压枪节奏；排坑：靶偏轴 ±14px 时直线弹道全脱靶导致首轮五把误测为 0）。基准前带宽 12~385（32 倍）：Claude 385 超模、通义 12 崩底。调参 10 处（claude dmgMax 42→18/cd .45→.5、grok 10→7、glm 17→14、gemini 6→10、qwen 4.6→7.5+聚拢+射程 150、doubao 12.5→16、deepseek 2.3→2.9、chatgpt 10→12），调后 39~198（约 5 倍，且贴脸霰弹在此基准天然低估）：Claude 198 / Grok 130 / Midjourney 128 / GLM 118 / Kimi 114 / 文心 111 / MiniMax 76 / ChatGPT 69 / 豆包 61 / DeepSeek 57 / Gemini 50 / 通义 39。
+- Verification: HR 计数实测 ✅；核爆 4817 亮 px、复活金翼 790、暴击星芒 50、咖啡蒸汽开关对照差值 59 ✅；贴花 46/局 ✅；两轮全武器基准复测 ✅；npm run build 通过；控制台零 error。generated/ 累计 652 个素材文件、57 组帧动画。
+
+## 2026-07-06 - 自瞄预判 + 工位炮台手感修复
+
+- Requested: 全自动模式好几把武器打不到人；工位钉子户（MiniMax）射速慢打不到小怪最垃圾。
+- Root cause: ①全托管自瞄与全部炮台（工位/交付节点/知识库/订书机/僚机）都瞄目标**当前位置**，慢弹对移动怪几何上不可能命中（110px/s 横移 × 0.47s 弹道 = 51px 偏移 vs 5.5px 命中窗）；②抛物线武器（文心）的落点在桌面全托管下取**鼠标位置**距离（等于随机落点）；③MiniMax 本体数值孱弱（弹速 320、射速 .75、伤害 6）。
+- Implemented:
+  - updateUnit 每帧记录单位速度（_vx/_vy），新增 leadAim() 预判助手（按弹速与距离计算提前量，上限 0.9s）。
+  - 接入 6 个开火点：全托管主武器自瞄、工位炮台（弹速 320→430、射程 ×1.2）、十倍交付机节点、知识库炮台、订书机/脚本终端、武器僚机 drone。
+  - 抛物线落点：全托管下改用自瞄目标距离（复用 touch.aimTarget 通道）。
+  - MiniMax 数值：cd 2.5→2.2、dmg 6→8、shotCd .75→.5、deployLife 12→14、range 190→220。
+- Verification: 移动靶（110px/s 折返、150px 距离、全托管）——ChatGPT 直线弹 0→17 DPS（无预判时几何不可命中）、Gemini 29、Claude 蓄力 31、文心抛物线（旧：随机落点）→45、MiniMax 44；全托管完整试用期 3 局：修复前 52~88s 必死 → 修复后 2/3 局存活满 240s 模拟窗；npm run build 通过；控制台零 error。
+
+## 2026-07-06 - 小 Boss 博弈重做 + 武器识别度/主武器抽卡/双持系统
+
+- Requested: ①小 Boss 技能设计没有博弈感；②武器芯片识别度差、难攒同款升级、主武器应能被抽到、希望能双持 2-3 把主武器。
+- Implemented:
+  - 小 Boss 博弈循环（tier2 全部 6 种考核官）：追击 → 签名技预警（ringwarn/beam 明确标记，0.55~0.8s 躲闪窗）→ 爆发 → **破绽窗口**（1.6s 易伤 35% + 减速，飘字"破绽！狠狠输出！"）→ 循环。签名技各具身份：PPT 三连激光横扫（穿缝）、向上管理三连冲撞（拉开落点）、小报告轨迹四连爆（别走直线）、会议邀请三大圈+减速水渍、卷王实习生标记飞扑重锤、考勤官三点名圈（穿空隙）。全部走 delay() 游戏内队列。
+  - 武器芯片识别度：CHIP_ICONS drop-in 通道（chip_<id>.png，12 品牌徽记式芯片图标生成中）+ **攒芯片指示圈**：同款可升级=金圈脉冲、可进副手空槽=青圈——一眼锁定该捡哪块。
+  - 主武器进卡池：「同款芯片速递」（主武器 +1 级，满级后转副手；权重 .9）——难攒同款的问题由地面金圈 + 卡池双通道解决。
+  - 双持系统：Lv6+ 卡池出现「🗡 双持工牌」（权重 1.15）解锁第二主武器槽；异款芯片自动装入副手、同款芯片/速递卡可继续升级副手；副手与主武器同角度同时开火，55% 伤害（wpnDmg._offhand）；换枪/融合仍作用于主手；HUD 显示副手状态；机器人不享受双持。
+- Verification: 双持全链路 ✅（抽卡解锁→异款自动装备 deepseek Lv2→同款升 Lv3→主副双色弹幕同屏）；速递卡出现率 6/60 轮、双持卡 7/60 轮、选中主武器 +1 ✅；博弈循环状态机 chase→burst（预警特效 115 帧）→recover（易伤 0.35）→chase 实测运转 ✅；npm run build 通过。
+
+## 2026-07-07 - 素材第四轮（角色/弹道/部门Boss/图标全家桶）+ 人设头像 UI 接线
+
+- Requested: 在"还缺哪些素材"清单（7 类）中用户勾选了战斗优先（状态图标/全武器弹道/融合与Boss技能特效）+ 角色优先（人设皮肤+头像/部门Boss与HR与OPC召唤立绘/芯片图标）——即除环境细节外全部补齐。
+- Implemented（34 个生成任务，5 条 codex lane 并行 + 1 条补漏 lane）：
+  - 人设：5 套玩家走路循环 `player_<persona>_f0..8`（降本增效官/摸鱼艺术家/RLHF/活人矿/OPC）+ 5 张头像 `portrait_<persona>` + 4 张卡类图标 `cardicon_*`（库图 3×3 切）。
+  - 弹道：12 种主武器专属弹 `proj_<id>_f0..8`（DeepSeek 鲸鱼弹/Kimi 月牙/Claude 星芒橙珠/Gemini 双子星…）；发现 proj_glm、proj_claude 漏排任务，补 FIX lane 重排。
+  - 部门 Boss：6 个 `elite_<id>_dept` 待机动画——键名与 data/tech.js 的 DEPT_BOSSES 精确对齐，drop-in 零改动生效。
+  - HR 制服兵 `elite_hr`、OPC 召唤物三件套 `mob_opc_clone/contractor/wall`（走 v2.4 sprKey 通道）。
+  - Boss 技能特效：`fx_bosspie`（画大饼）/`fx_bossroar`（咆哮点名）/`fx_bossslam`（拍桌冲击波）/`fx_fusion`（传说融合爆发）。
+  - 图标：9 个头顶状态图标 `status_*`（幻觉/过拟合/复读/举报/易伤/无敌/减速/眩晕；burn 备用未接——引擎暂无单体灼烧状态）+ 12 个品牌芯片 `chip_<id>`（4×4 库图）。
+  - UI 接线：LevelUpScreen 人设卡右上 34px 头像、PauseScreen 员工档案行 20px 头像（import.meta.glob eager）。
+- 排坑: zsh 数组下标从 1 起导致 chip 库图切片整体错位一格（chip_deepseek 变月亮）——全部删除按 0 起重切并逐格目检；proj_chatgpt/doubao raw 到货未切补切；切片脚本对 4×4 库图先缩放 1024 再 crop 256。
+- Verification（引擎驱动 + 像素 hash 对照 + DOM）: 人设 5 选 1 卡头像 5/5 张 128px 加载 ✅；锁定人设后玩家皮肤像素 hash 变化 ✅；暂停档案头像 portrait_slacker 128px ✅；全自动开火弹丸 sprKey=proj_chatgpt ✅；状态图标行（眩晕+易伤+减速）头顶像素变化 ✅；部门 Boss cfo/cto/legal 三皮肤像素对照 ✅；OPC 三召唤物贴图 ✅；4 个 Boss 技能 fx 中段帧采样 ✅；npm run build 通过；控制台零 error。generated/ 累计 925 个素材文件、84 组九帧动画。

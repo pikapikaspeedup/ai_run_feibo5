@@ -11,6 +11,12 @@ import { EVOLUTIONS } from '../../game/data/evolutions.js';
 import { milestoneLabel } from '../../game/data/milestones.js';
 import * as bridge from '../../game/bridge.js';
 
+/* v2.4 人设头像 */
+const PORTRAITS = {};
+for (const [path, url] of Object.entries(import.meta.glob('../../assets/generated/portrait_*.png', { eager: true, import: 'default' }))) {
+  PORTRAITS[path.split('/').pop().replace('.png', '').replace(/^portrait_/, '')] = url;
+}
+
 const RARITY_COLOR = { 白: '#f2efe6', 绿: '#7ee08a', 蓝: '#7ac8ff', 紫: '#b665ff', 橙: '#ff9440' };
 const PERSONA_NAMES = { optimizer: '首席降本增效官', slacker: '摸鱼表演艺术家', rlhf: '人肉 RLHF 训练员', revival: '万年活人矿·二次入职', opc: '一人公司 OPC' };
 
@@ -68,7 +74,7 @@ export default function PauseScreen() {
 
   const hp = Math.round(pl.hp);
   const hpMax = Math.round(maxHp(pl));
-  const persona = pl.persona ? PERSONA_NAMES[pl.persona] || pl.persona : '未锁定';
+  const persona = pl.personaFree ? '自由人 · 纯随机流' : pl.persona ? PERSONA_NAMES[pl.persona] || pl.persona : '未锁定';
 
   return (
     <div className="overlay">
@@ -86,7 +92,9 @@ export default function PauseScreen() {
               <div><span className="stat-lbl">护盾</span><span className="stat-val" style={{ color: '#6aa3ff' }}>{Math.round(pl.shield)}</span></div>
             )}
             <div><span className="stat-lbl">击杀</span><span className="stat-val">{pl.kills || 0}</span></div>
-            <div><span className="stat-lbl">人设</span><span className="stat-val" style={{ color: pl.persona ? '#ffcf33' : '#8a8271' }}>{persona}</span></div>
+            <div><span className="stat-lbl">人设</span><span className="stat-val" style={{ color: pl.persona ? '#ffcf33' : '#8a8271' }}>
+              {pl.persona && PORTRAITS[pl.persona] && <img src={PORTRAITS[pl.persona]} alt="" style={{ width: 20, height: 20, imageRendering: 'pixelated', verticalAlign: 'middle', marginRight: 5 }} />}
+              {persona}</span></div>
           </div>
 
           <div className="pause-grid">

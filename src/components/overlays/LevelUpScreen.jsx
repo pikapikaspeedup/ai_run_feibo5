@@ -1,5 +1,11 @@
 import React from 'react';
-import { getG, getLevelChoices, pickLevelChoice, rerollLevelup, snoozePersonaIntro } from '../../game/core.js';
+import { getG, getLevelChoices, pickLevelChoice, rerollLevelup, snoozePersonaIntro, choosePersonaFree } from '../../game/core.js';
+
+/* v2.4 人设头像（portrait_<persona>.png，AI 生成切片） */
+const PORTRAITS = {};
+for (const [path, url] of Object.entries(import.meta.glob('../../assets/generated/portrait_*.png', { eager: true, import: 'default' }))) {
+  PORTRAITS[path.split('/').pop().replace('.png', '').replace(/^portrait_/, '')] = url;
+}
 
 export default function LevelUpScreen() {
   const G = getG();
@@ -29,8 +35,8 @@ export default function LevelUpScreen() {
           )}
           {isPersonaIntro && (
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button className="btn ghost" onClick={() => pickLevelChoice(Math.floor(Math.random() * choices.length))}>
-                🎲 听天由命（随机分配人设）
+              <button className="btn ghost" onClick={choosePersonaFree}>
+                🎲 纯随机流：不要人设，整到啥用啥（本局生效）
               </button>
               <button className="btn ghost" onClick={snoozePersonaIntro}>
                 🫥 先不站队（这次看普通卡，下次再问）
@@ -45,6 +51,9 @@ export default function LevelUpScreen() {
                 onKeyDown={e => e.key === 'Enter' && pickLevelChoice(i)}>
                 <div className="k-no">{s.personaIntro ? 'PERSONA' : s.kind === 'milestone' ? 'PROMO' : s.kind === 'sub' ? 'GEAR' : s.kind === 'active' ? 'ACTIVE' : 'SKILL'}-{String(s.id).toUpperCase().slice(0, 12)}</div>
                 {s.kind === 'skill' && pl.skills[s.id] ? <div className="k-stack">已持有 {pl.skills[s.id]}/{s.max}</div> : null}
+                {s.persona && PORTRAITS[s.persona] && (
+                  <img src={PORTRAITS[s.persona]} alt="" style={{ width: 34, height: 34, imageRendering: 'pixelated', float: 'right', marginLeft: 6 }} />
+                )}
                 <div className="k-name">{s.rare ? '✨ ' : s.kind === 'sub' ? '🔧 ' : s.kind === 'active' ? '⚡ ' : ''}{s.name}</div>
                 <div className="k-eff">{s.eff}</div>
                 {s.rare && <div className="k-eff" style={{ color: '#c9a227' }}>★ 精修版：效果双倍</div>}
