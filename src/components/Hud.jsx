@@ -158,7 +158,7 @@ export default function Hud() {
           </div>
         ) : (
           <>
-            <div className="tag">存活牛马 <b>{aliveWorkers() + (G.latentBots ? G.latentBots.length : 0)}</b>/{TUNE.botCount + 1}{G.latentBots ? '（同事未到岗）' : ''}</div>
+            <div className="tag">存活牛马 <b>{aliveWorkers() + (G.latentBots ? G.latentBots.length : 0)}</b>/{(G.botCount || 19) + 1}{G.latentBots ? '（同事未到岗）' : ''}</div>
             <div className="tag" id="next-tag" style={{ marginTop: 4 }}>{nextZone}</div>
           </>
         )}

@@ -203,6 +203,9 @@ export const wpnDmg = u => {
 export const droneCount = (u, def) =>
   def.kind === 'drone' ? Math.min(3, def.drones + Math.floor((u.weapon.lvl - 1) / 2)) : def.drones;
 export const wpnName = u => u.weapon.leg ? LEGENDS[u.weapon.leg].name : `${WEAPONS[u.weapon.id].name} Lv.${u.weapon.lvl}`;
+/* v2.8.1 蓄力实际上限（Claude Lv2/3 蓄力缩短）——全托管判定必须与 updateWeapon 同源,
+ * 否则升级后蓄力永远充不到旧上限、判定永远"没蓄满"、永不松手发射 */
+export const chargeCapOf = (u, def) => def.chargeT * (u.weapon.lvl >= 3 ? .7 : u.weapon.lvl >= 2 ? .85 : 1);
 export const fireRateOf = u => {
   const f = u.mods.fireRate * (u.buffs.fireT > 0 ? u.buffs.fireM : 1) * (u.curses.overflow > 0 ? .55 : 1);
   return f <= 2 ? f : 2 + Math.sqrt(f - 2) * .6;   // 软上限：射速不再是唯一无限乘区
@@ -230,7 +233,7 @@ export const speedOf = u => {
 };
 
 /* ---------- 对局创建 ---------- */
-function newGame(trialMonths = 0) {
+function newGame(trialMonths = 0, botCount = 19) {
   const W = TUNE.world;
   const g = {
     /* 试用期：每月三波固定敌人 + 月度考核 Boss；期间同事互相无敌
@@ -262,7 +265,9 @@ function newGame(trialMonths = 0) {
     rooms: [],   // 带门房间登记表 {x0,y0,x1,y1,dx,dy}：mob 寻路经门进出，见 updateMob
     zone: { cx: W / 2, cy: W / 2, r: TUNE.zoneR0, phase: 0, shrinking: false,
       fromR: 0, toR: 0, fromCx: 0, fromCy: 0, toCx: 0, toCy: 0, shrinkT: 0, dps: 1 },
-    kills: 0, playerRank: 0, bossSpawned: false, bossDead: false, boss: null, turrets: [],
+    kills: 0, playerRank: 0, botCount, bossSpawned: false,
+    /* v2.8.1 分享卡行为统计（人格判定数据源） */
+    stats: { killsHuman: 0, killsAI: 0, maxStreak: 0, potCount: 0, execCount: 0, itemsUsed: 0, hrbpTalked: false, bucketKilled: 0, bossKilled: 0, events: [] }, bossDead: false, boss: null, turrets: [],
     chipT: 15, itemT: 12, techT: 20, eliteT: 35, minibossT: 95, incidentT: 55, incidentSeq: 0, pendingLevels: 0, hoverChip: null,
     hrbpT: 50,   // v2.5 转正后首次绩效盘点（HRBP 登场）倒计时
     /* v2.0 Phase E · 5 种环境事件 CD 计时器 */
@@ -398,8 +403,8 @@ function newGame(trialMonths = 0) {
    *   ai(AI 牛马)    10 台：aiNames 池，人格偏"机械内卷"（卷王/外包/救火），命中更准（aimErr ×.75）
    * v2.0 · 7 同事 AI 分型见下（juan 卷王 / norm 普通 / moyu 摸鱼 / veteran 老油条 /
    * crony 关系户 / outsource 外包 / firefighter 救火 / uptalk 向上管理） */
-  const humanN = Math.floor((TUNE.botCount - 1) / 2);          // 19 → 9 人类
-  const aiN = TUNE.botCount - humanN;                          // 19 → 10 AI
+  const humanN = Math.floor((botCount - 1) / 2);          // 19→9 / 49→24 人类
+  const aiN = botCount - humanN;                          // 19→10 / 49→25 AI
   const humanPers = shuffle(['moyu', 'moyu', 'moyu', 'veteran', 'veteran', 'uptalk', 'crony', 'norm', 'norm']);
   const aiPers = shuffle(['juan', 'juan', 'juan', 'juan', 'juan', 'outsource', 'outsource', 'outsource', 'firefighter', 'norm']);
   const roster = shuffle([
@@ -415,7 +420,7 @@ function newGame(trialMonths = 0) {
     g.latentBots = roster;
   } else {
     g.latentBots = null;
-    for (let i = 0; i < TUNE.botCount; i++) {
+    for (let i = 0; i < botCount; i++) {
       let bx = W / 2, by = W / 2;
       for (let tries = 0; tries < 30; tries++) {
         const a = rand(0, Math.PI * 2), rr = rand(250, TUNE.zoneR0 * .85);
@@ -1006,7 +1011,7 @@ function updateWeapon(u, dt, wantFire, aimA) {
   /* Claude 蓄力（吃模组：射速类加快蓄力、注意力加宽光束、少样本扇形多束） */
   if (kind === 'charge') {
     /* Claude: Lv2 蓄力-15% → Lv3 蓄力-30% → Lv4 光束加宽+3 → Lv5 满蓄时背后补一道50%光束（并行 agent 防背刺） */
-    const effT = def.chargeT * (w.lvl >= 3 ? .7 : w.lvl >= 2 ? .85 : 1);
+    const effT = chargeCapOf(u, def);
     if (wantFire && w.cd <= 0) {
       w.charging = true;
       w.charge = Math.min(effT, w.charge + dt * fireRateOf(u));
@@ -2135,6 +2140,7 @@ function killUnit(victim, killer, cause, opts = {}) {
     if (killer.isPlayer) {
       killer.killStreak = (killer.streakT || 0) > G.t ? (killer.killStreak || 0) + 1 : 1;
       killer.streakT = G.t + 2.5;
+      if (G.stats && killer.killStreak > G.stats.maxStreak) G.stats.maxStreak = killer.killStreak;
       const s = killer.killStreak;
       if (s === 5) addFloat(killer.x, killer.y - 28, '🔥 卷出水平了', '#ffcf33', 12, 1.6);
       else if (s === 10) { warn('🔥 10 连杀：这位更是重量级'); cam.shake = Math.max(cam.shake, 4); }
@@ -2146,6 +2152,7 @@ function killUnit(victim, killer, cause, opts = {}) {
       if (G.frameKillT === G.t) G.frameKillN++;
       else { G.frameKillT = G.t; G.frameKillN = 1; }
       if (G.frameKillN === 5) {
+        if (G.stats) G.stats.potCount++;
         addFloat(victim.x, victim.y - 30, '🍲 一锅端！', '#ff9440', 14, 1.8);
         addFx({ type: 'potfx', x: victim.x, y: victim.y - 6, r: 30, life: .9 });
         addParts(victim.x, victim.y, '#ff9440', 18, 110, .8);
@@ -2157,6 +2164,14 @@ function killUnit(victim, killer, cause, opts = {}) {
         killer.execStreakT = G.t + 4;
         if (killer.execStreak === 3) addFloat(killer.x, killer.y - 26, '📝 裁员名单又划掉三行', '#ff6a6a', 11, 1.6);
       }
+    }
+    /* v2.8.1 分享统计 */
+    if (killer.isPlayer && G.stats) {
+      if (victim.bot && victim.species === 'human') G.stats.killsHuman++;
+      else if (victim.bot && victim.species === 'ai') G.stats.killsAI++;
+      if (victim.mobType === 'bucket_runner') G.stats.bucketKilled++;
+      if (victim.eliteTier === 2) G.stats.bossKilled++;
+      if (opts.executed) G.stats.execCount++;
     }
     /* v2.6 嘴替：bot 击杀 worker 后说两句（跨物种嘲讽优先） */
     if (killer.bot && !victim.isMob && !victim.isSummon && Math.random() < .5) {
@@ -2238,6 +2253,9 @@ function killUnit(victim, killer, cause, opts = {}) {
     /* 死亡回执：凶手、差距——最强的"再来一局"燃料 */
     G.deathInfo = {
       killer: killer ? killer.name : (cause === 'zone' ? '裁员红线' : cause === 'burn' ? '一张画的饼' : '意外'),
+      /* v2.8.3 结构化死因（分享卡文书判定用——不再猜字符串） */
+      byBoss: !!(killer && (killer.isBoss || killer.eliteTier === 2)),
+      byZone: cause === 'zone',
       weapon: killer && !killer.isElite && !killer.isBoss && !killer.isMob
         ? (killer.weapon.leg ? `「${LEGENDS[killer.weapon.leg].name}」` : WEAPONS[killer.weapon.id].name)
         : null,
@@ -2301,6 +2319,7 @@ export function applySkill(u, s) {
 }
 
 function useItem(u, id) {
+  if (u.isPlayer && G.stats) G.stats.itemsUsed++;
   let boost = u.mods.itemBoost;
   /* v2.6.1 金色时刻：2% 这单免费——效果翻倍 */
   if (u.isPlayer && Math.random() < .02) {
@@ -3299,6 +3318,7 @@ export function update(dt) {
           const ev = pick(pool);
           G.lastOfficeEvent = ev.id;
           G.officeEvent = { id: ev.id, t: ev.dur };
+          if (G.stats) G.stats.events.push(ev.id);
           warn('📋 ' + ev.name);
           ev.start();
         }
@@ -4092,7 +4112,7 @@ function updateUnit(u, dt) {
       touch.aimTarget = tgt;
       if (tgt) {
         aimA = Math.atan2(tgt.y - u.y, tgt.x - u.x);
-        wantFire = def.kind === 'charge' ? u.weapon.charge < def.chargeT - .01 : true;
+        wantFire = def.kind === 'charge' ? u.weapon.charge < chargeCapOf(u, def) - .01 : true;
       } else {
         wantFire = def.kind === 'charge' && u.weapon.charging;
       }
@@ -4106,7 +4126,7 @@ function updateUnit(u, dt) {
         touch.aimTarget = tgt;
         if (tgt) {
           aimA = leadAim(u.x, u.y, tgt, def.spd || 0);   // 全托管自瞄带移动预判
-          wantFire = def.kind === 'charge' ? u.weapon.charge < def.chargeT - .01 : true;
+          wantFire = def.kind === 'charge' ? u.weapon.charge < chargeCapOf(u, def) - .01 : true;
         } else {
           wantFire = def.kind === 'charge' && u.weapon.charging;
         }
@@ -4116,7 +4136,7 @@ function updateUnit(u, dt) {
         const rng = Math.max(220, (def.range || 220) * 1.2);
         const hasFoe = !!nearestUnit(u.x, u.y, rng, o => isFoe(u, o));
         if (mouse.down) wantFire = true;
-        else if (hasFoe) wantFire = def.kind === 'charge' ? u.weapon.charge < def.chargeT - .01 : true;
+        else if (hasFoe) wantFire = def.kind === 'charge' ? u.weapon.charge < chargeCapOf(u, def) - .01 : true;
         else wantFire = def.kind === 'charge' && u.weapon.charging;
       } else {
         touch.aimTarget = null;
@@ -6517,6 +6537,7 @@ function updateHrbp(u, dt) {
     if ((u.talkFeedCd || 0) < G.t) {   // v2.6.2 开场播报 3s 冷却，防重复开始刷 feed
       u.talkFeedCd = G.t + 3;
       addFeed(`📋 HRBP 开始约谈绩效垫底的 ${t.name}${t.isPlayer ? '——就是你！打断他，或当场杀一个自证绩效' : ''}`, t.isPlayer);
+    if (t.isPlayer && G.stats) G.stats.hrbpTalked = true;
     }
     if (t.bot) bubble(t, 'hrbp');   // v2.6 被锁定的同事惊呼
   }
@@ -7916,7 +7937,9 @@ export function startGame() {
   let months = 3;
   try { months = parseInt(localStorage.getItem('niuma_trial') ?? '3', 10); } catch (e) { /* ignore */ }
   months = clamp(isNaN(months) ? 3 : months, 0, 6);
-  G = newGame(months);
+  let botN = 19;
+  try { botN = parseInt(localStorage.getItem('niuma_botcount') || '19', 10) || 19; } catch (e) { /* ignore */ }
+  G = newGame(months, clamp(botN, 19, 49));
   /* 免试用期开局直面 19 个持枪同事：给一段开局护盾缓冲（实测全托管 15 秒暴毙，落地成盒劝退） */
   if (months === 0) { G.player.shield = 30; G.player.shieldT = 20; }
   /* v2.6.1 开局金色时刻：1% 风水宝地（全属性+5%）/ 5% 幸运周五（掉落+15%），可叠加 */

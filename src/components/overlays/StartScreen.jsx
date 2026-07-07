@@ -43,6 +43,14 @@ export default function StartScreen() {
     setTrial(m);
     try { localStorage.setItem('niuma_trial', String(m)); } catch (e) { /* ignore */ }
   };
+  /* v2.8.1 公司规模：20 人小作坊 / 50 人大厂（bot 数 19/49） */
+  const [botN, setBotN] = useState(() => {
+    try { return parseInt(localStorage.getItem('niuma_botcount') || '19', 10) || 19; } catch (e) { return 19; }
+  });
+  const pickBotN = n => {
+    setBotN(n);
+    try { localStorage.setItem('niuma_botcount', String(n)); } catch (e) { /* ignore */ }
+  };
   const tip = useMemo(() => pick(COPY.tips), []);
   const best = useMemo(() => loadBest(), []);
   const wRows = country => Object.entries(WEAPONS).filter(([, d]) => d.country === country);
@@ -98,6 +106,12 @@ export default function StartScreen() {
                 : trial <= 4 ? `${trial} 个月发育期（标准）`
                 : `${trial} 个月发育期（充分发育，后期琐事凶猛；缩圈相应提前）`}
             </span>
+          </div>
+          <div className="trial-row">
+            <span className="trial-label">公司规模（同层对手数量）：</span>
+            <button className={'trial-btn' + (botN === 19 ? ' on' : '')} onClick={() => pickBotN(19)} style={{ width: 'auto', padding: '0 8px' }}>20 人小作坊</button>
+            <button className={'trial-btn' + (botN === 49 ? ' on' : '')} onClick={() => pickBotN(49)} style={{ width: 'auto', padding: '0 8px' }}>50 人大厂</button>
+            <span className="trial-note">{botN === 49 ? '49 个对手同层竞争，人挤人，刺激加倍' : '19 个对手，经典节奏'}</span>
           </div>
           <div className="btn-row">
             <button className="btn" onClick={enterGame}>签到进场</button>
