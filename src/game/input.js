@@ -1,14 +1,13 @@
 /* =====================================================================
  * 输入：键盘 / 鼠标 / 触屏（左半屏虚拟摇杆 + 自动瞄准状态）
  * ===================================================================== */
-import { VIEW_W, VIEW_H } from './constants.js';
+import { VIEW_W, VIEW_H, IS_COARSE } from './constants.js';
 import { clamp } from './utils.js';
 import { initAudio } from './audio.js';
 
 export const keys = new Set();
 export const mouse = { x: VIEW_W / 2, y: VIEW_H / 2, down: false };
-export const IS_TOUCH = typeof matchMedia !== 'undefined' &&
-  (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window);
+export const IS_TOUCH = IS_COARSE;   // 统一判定源（constants），支持 ?mobile=1 强制
 export const touch = { id: null, ox: 0, oy: 0, dx: 0, dy: 0, active: false, using: false, aimTarget: null };
 
 /* 由 core 注册：全局按键路由 */
@@ -74,7 +73,7 @@ export function attachInput(canvas, stageEl) {
     for (const t of e.changedTouches) {
       if (t.identifier === touch.id) {
         let dx = t.clientX - touch.ox, dy = t.clientY - touch.oy;
-        const m = Math.hypot(dx, dy), R = 44;
+        const m = Math.hypot(dx, dy), R = 54;   // 摇杆行程放大（配合 MOBA 大摇杆视觉）
         if (m > R) { dx = dx / m * R; dy = dy / m * R; }
         touch.dx = dx / R; touch.dy = dy / R;
         positionJoy(touch.ox, touch.oy, touch.ox + dx, touch.oy + dy);

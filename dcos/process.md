@@ -1174,3 +1174,15 @@
   - UI 接线：LevelUpScreen 人设卡右上 34px 头像、PauseScreen 员工档案行 20px 头像（import.meta.glob eager）。
 - 排坑: zsh 数组下标从 1 起导致 chip 库图切片整体错位一格（chip_deepseek 变月亮）——全部删除按 0 起重切并逐格目检；proj_chatgpt/doubao raw 到货未切补切；切片脚本对 4×4 库图先缩放 1024 再 crop 256。
 - Verification（引擎驱动 + 像素 hash 对照 + DOM）: 人设 5 选 1 卡头像 5/5 张 128px 加载 ✅；锁定人设后玩家皮肤像素 hash 变化 ✅；暂停档案头像 portrait_slacker 128px ✅；全自动开火弹丸 sprKey=proj_chatgpt ✅；状态图标行（眩晕+易伤+减速）头顶像素变化 ✅；部门 Boss cfo/cto/legal 三皮肤像素对照 ✅；OPC 三召唤物贴图 ✅；4 个 Boss 技能 fx 中段帧采样 ✅；npm run build 通过；控制台零 error。generated/ 累计 925 个素材文件、84 组九帧动画。
+
+## 2026-07-07 - PWA 全屏支持 + 移动端 MOBA 化操控 + 世界放大（Boss 例外）
+
+- Requested: ①移动端浏览器不能全屏，做 PWA；②移动端要 MOBA 式操作体验；③移动端所有东西都放大，除了 Boss。
+- Implemented:
+  - **PWA 四件套**：`public/manifest.webmanifest`（display fullscreen + 锁横屏 + maskable 图标）、`public/sw.js`（导航 network-first 保更新，静态资源 stale-while-revalidate——925 个素材边玩边缓存，二次进入秒开可离线）、`index.html` iOS/安卓全套 meta（apple-touch-icon/black-translucent/theme-color）、`main.jsx` 仅生产注册 SW（dev 防缓存干扰 HMR）。图标用 portrait_slacker 摸鱼艺术家生成 192/512/maskable/180 四规格。
+  - **进场即全屏**：签到进场按钮借用户手势 requestFullscreen + screen.orientation.lock('landscape')（iOS 网页不支持则静默跳过，靠 PWA 安装达成）；StartScreen 移动端加"添加到主屏幕"提示（standalone 模式下自动隐藏）。
+  - **世界放大 4/3（Boss 例外）**：移动端逻辑视口 640×360→高度锁 270、宽度按屏幕长宽比 16:9~21:9 自适应（如 iPhone 14 横屏=584×270），全面屏无黑边无裁切；单位/特效/飘字全部视觉放大 33%；drawUnit 三处 Boss scale ÷ MOBILE_ZOOM 保持原视觉大小。cam clamp 从硬编码 320/640/180/360 参数化为 VIEW_W/H。
+  - **MOBA 技能盘**：右下拇指弧区重排——冲刺主键 80px 右下角、Q 战术 60px 左弧、E 大招 68px 上弧（就绪时金光呼吸）、换枪/融合情境键外弧、暂停右上；冷却 conic-gradient 扫盘遮罩 + 秒数 + 按压缩放反馈 + navigator.vibrate 震动；真触屏设备开局即显示（老逻辑要先摸屏幕才出现）；摇杆 96→124px、行程 44→54。
+  - **HUD 放大**：pointer:coarse 下四角锚定 scale 1.22（血条/波次/小地图/击杀播报），不动布局流。
+  - **调试通道**：`?mobile=1` 强制移动模式（IS_COARSE 统一判定源，input.js IS_TOUCH 改为 re-export）。
+- Verification: `?mobile=1` + 844×390 视口——逻辑视口 584×270 按屏比自适应、canvas 铺满 843×390、zoom=4/3、manifest display=fullscreen、sw.js 可达 ✅；技能盘四键落位精确（80/60/68/42px + 弧形坐标）、摇杆 124px ✅；Q 冷却扫盘渲染 ✅；Boss 变身渲染冒烟 ✅；桌面无参数回归 640×360/zoom=1 ✅；npm run build 通过；控制台零 error。真机全屏/安装/震动需手机实测。

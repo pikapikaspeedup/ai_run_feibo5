@@ -2,7 +2,7 @@
  * 游戏引擎核心：对局状态 / 单位 / 武器 / 战斗 / AI / 缩圈 / Boss / 野怪 / 拾取
  * 不直接操作 DOM —— 一切 UI 通过 bridge 事件与版本号通知 React
  * ===================================================================== */
-import { TUNE } from './constants.js';
+import { TUNE, VIEW_W, VIEW_H } from './constants.js';
 import { rand, randi, pick, clamp, lerp, dist, dist2, shuffle, distToSeg } from './utils.js';
 import { WEAPONS, LEGENDS, findRecipe, recipePartner, wdef } from './data/weapons.js';
 import { SKILLS } from './data/skills.js';
@@ -3188,8 +3188,8 @@ export function update(dt) {
   G.floats = G.floats.filter(f => f.t < f.life);
 
   const pl = G.player;
-  cam.x = clamp(pl.x - 320, 0, TUNE.world - 640);
-  cam.y = clamp(pl.y - 180, 0, TUNE.world - 360);
+  cam.x = clamp(pl.x - VIEW_W / 2, 0, TUNE.world - VIEW_W);
+  cam.y = clamp(pl.y - VIEW_H / 2, 0, TUNE.world - VIEW_H);
   cam.shake = Math.max(0, cam.shake - dt * 18);
 
   endChecks(dt);

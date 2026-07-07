@@ -20,6 +20,19 @@ function DexIcon({ color }) {
   return <canvas ref={ref} width={9} height={8} />;
 }
 
+/* 移动端进场：借用户点击手势请求全屏 + 锁横屏（iOS 不支持则静默跳过，靠 PWA 安装获得全屏） */
+function enterGame() {
+  if (IS_TOUCH && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+      .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'))
+      .catch(() => {});
+  }
+  startGame();
+}
+
+const IS_STANDALONE = typeof matchMedia !== 'undefined' &&
+  (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone === true);
+
 export default function StartScreen() {
   const [dexOpen, setDexOpen] = useState(false);
   const [trial, setTrial] = useState(() => {
@@ -47,10 +60,17 @@ export default function StartScreen() {
           <p>{COPY.intro}</p>
           <hr />
           {IS_TOUCH ? (
-            <div className="kbd-row">
-              <span><kbd>左半屏拖动</kbd> 移动</span><span><kbd>自动</kbd> 瞄准并开火</span>
-              <span><kbd>右下按钮</kbd> 换枪 / 融合 / 冲刺</span><span><kbd>⏸</kbd> 暂停</span>
-            </div>
+            <>
+              <div className="kbd-row">
+                <span><kbd>左半屏拖动</kbd> 移动</span><span><kbd>自动</kbd> 瞄准并开火</span>
+                <span><kbd>右下技能盘</kbd> 冲刺 / Q / E / 换枪融合</span><span><kbd>⏸</kbd> 暂停</span>
+              </div>
+              {!IS_STANDALONE && (
+                <div className="tip-line" style={{ color: '#8a8271' }}>
+                  📲 浏览器菜单选「添加到主屏幕」安装后，全屏无地址栏，体验拉满。
+                </div>
+              )}
+            </>
           ) : (
             <div className="kbd-row">
               <span><kbd>WASD</kbd> 移动</span><span><kbd>鼠标</kbd> 瞄准 / 按住开火</span>
@@ -80,7 +100,7 @@ export default function StartScreen() {
             </span>
           </div>
           <div className="btn-row">
-            <button className="btn" onClick={startGame}>签到进场</button>
+            <button className="btn" onClick={enterGame}>签到进场</button>
             <button className="btn ghost" onClick={() => setDexOpen(o => !o)}>武器图鉴 {dexOpen ? '▴' : '▾'}</button>
             <a className="btn ghost" href="https://github.com/pikapikaspeedup/ai_run_feibo5"
               target="_blank" rel="noopener noreferrer">★ GitHub 开源仓库</a>

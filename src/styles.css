@@ -284,30 +284,65 @@ canvas#cv {
 
 #mute-note { position: fixed; bottom: 8px; right: 12px; font-family: var(--mono); font-size: 10px; color: #55607a; z-index: 5; }
 
-/* ============ 触屏控件 ============ */
+/* ============ 触屏控件：MOBA 式右下技能盘 ============ */
 #touch-ui { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
 #touch-ui .tbtn {
   position: absolute; pointer-events: auto;
-  width: 58px; height: 58px; border-radius: 50%;
-  background: rgba(16, 19, 25, .78); border: 2px solid rgba(255,255,255,.35);
-  color: var(--paper); font-family: var(--sans); font-weight: 700; font-size: 12px;
+  width: 60px; height: 60px; border-radius: 50%;
+  background: rgba(16, 19, 25, .82); border: 2px solid rgba(255,255,255,.4);
+  color: var(--paper); font-family: var(--sans); font-weight: 700; font-size: 13px;
   display: flex; align-items: center; justify-content: center; text-align: center;
   -webkit-tap-highlight-color: transparent; touch-action: none;
   user-select: none; -webkit-user-select: none;
+  overflow: hidden;
+  box-shadow: 0 3px 10px rgba(0,0,0,.45);
+  transition: transform .06s;
 }
-#btn-interact-m { right: max(16px, env(safe-area-inset-right)); bottom: 100px; border-color: var(--badge); color: var(--badge); }
-#btn-interact-m.fuse { background: var(--badge); color: var(--ink); animation: blink .8s steps(2) infinite; }
-#btn-dash-m { right: 90px; bottom: max(22px, env(safe-area-inset-bottom)); }
-#btn-dash-m.cd { opacity: .4; }
-#btn-active-m { right: 90px; bottom: 100px; border-color: #b665ff; color: #e6c9ff; }
-#btn-active-m.cd { opacity: .4; }
-/* E 槽大招：右下角，配色对齐 HUD 的 #active-chip-e（金黄） */
-#btn-active-e-m { right: max(16px, env(safe-area-inset-right)); bottom: max(22px, env(safe-area-inset-bottom)); border-color: #ffcf33; color: #ffe4a0; }
-#btn-active-e-m.cd { opacity: .4; }
-#btn-pause-m { top: 10px; right: 132px; width: 40px; height: 40px; font-size: 15px; }
+#touch-ui .tbtn:active { transform: scale(.9); }
+.t-inner { display: flex; flex-direction: column; align-items: center; line-height: 1.15; z-index: 1; }
+.t-name { font-size: 11px; }
+.t-sub { font-size: 9px; opacity: .75; }
+.t-key {
+  position: absolute; right: 7px; bottom: 5px; font-family: var(--mono);
+  font-size: 9px; opacity: .55; z-index: 2;
+}
+.t-cdmask { position: absolute; inset: -1px; border-radius: 50%; pointer-events: none; }
+.t-cdnum {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 17px; color: #fff; text-shadow: 0 1px 3px #000;
+  z-index: 2;
+}
+/* —— 右下弧形布局（拇指扇区）：冲刺主键在角落，Q 左弧、E 上弧、情境键外弧 —— */
+#touch-ui #btn-dash-m {
+  width: 80px; height: 80px; font-size: 22px;
+  right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom));
+  border-color: #7ac8ff;
+}
+#touch-ui #btn-dash-m .t-name { font-size: 11px; color: #bfe3ff; }
+#touch-ui #btn-active-m {
+  right: calc(max(18px, env(safe-area-inset-right)) + 96px); bottom: max(28px, env(safe-area-inset-bottom));
+  border-color: #b665ff; color: #e6c9ff;
+}
+#touch-ui #btn-active-e-m {
+  width: 68px; height: 68px;
+  right: calc(max(18px, env(safe-area-inset-right)) + 30px); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 94px);
+  border-color: #ffcf33; color: #ffe4a0;
+}
+#touch-ui #btn-interact-m {
+  right: calc(max(18px, env(safe-area-inset-right)) + 112px); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 102px);
+  border-color: var(--badge); color: var(--badge);
+}
+#touch-ui #btn-interact-m.fuse { background: var(--badge); color: var(--ink); animation: blink .8s steps(2) infinite; }
+#touch-ui #btn-pause-m { top: max(8px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); width: 42px; height: 42px; font-size: 16px; }
+/* 就绪呼吸提示：大招可放时微微发光 */
+#touch-ui #btn-active-e-m:not(.cd) { animation: readypulse 1.6s ease-in-out infinite; }
+@keyframes readypulse {
+  0%, 100% { box-shadow: 0 3px 10px rgba(0,0,0,.45), 0 0 0 0 rgba(255,207,51,.0); }
+  50% { box-shadow: 0 3px 10px rgba(0,0,0,.45), 0 0 14px 2px rgba(255,207,51,.45); }
+}
 #joy { position: fixed; left: 0; top: 0; display: none; z-index: 6; pointer-events: none; }
-#joy .base { position: absolute; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(255,255,255,.06); }
-#joy .knob { position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: rgba(255,207,51,.5); border: 2px solid var(--badge); }
+#joy .base { position: absolute; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; border: 2px solid rgba(255,255,255,.28); background: rgba(255,255,255,.07); }
+#joy .knob { position: absolute; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: rgba(255,207,51,.5); border: 2px solid var(--badge); }
 
 #rotate-hint { display: none; position: fixed; inset: 0; z-index: 30; background: rgba(8,10,14,.94);
   align-items: center; justify-content: center; text-align: center;
@@ -320,7 +355,15 @@ canvas#cv {
 @media (pointer: coarse) {
   #prompt-e { display: none !important; }
   #mute-note { display: none; }
-  #wpn-card { transform: scale(.82); transform-origin: bottom center; min-width: 0; }
+  /* 移动端 HUD 全面放大（配合逻辑视口 480×270 的世界放大）：
+   * 角落锚定 scale，不动布局流 */
+  .hud-tl { transform: scale(1.22); transform-origin: top left; }
+  .hud-tr { transform: scale(1.22); transform-origin: top right; }
+  .hud-tc { transform: translateX(-50%) scale(1.22); transform-origin: top center; }
+  .hud-bc { transform: translateX(-50%) scale(1.05); transform-origin: bottom center; }
+  #boss-bar-wrap { transform: translateX(-50%) scale(1.22); transform-origin: top center; }
+  #killfeed { transform: scale(1.15); transform-origin: top right; top: 104px; }
+  #wpn-card { min-width: 0; }
   #killfeed div:nth-child(n+4) { display: none; }
   .hud-tl .bar, .bar.xp { width: 150px; }
 }

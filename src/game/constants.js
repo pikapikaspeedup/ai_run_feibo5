@@ -1,6 +1,21 @@
-/* 视口与全局平衡数值 */
-export const VIEW_W = 640;
-export const VIEW_H = 360;
+/* 视口与全局平衡数值
+ * 移动端（粗指针）用更小的逻辑视口：同一块屏幕上单位/特效/文字都放大 33%，
+ * 手机上不再是一堆小蚂蚁。MOBILE_ZOOM 供渲染端做例外缩放（Boss 保持原视觉大小）。 */
+/* ?mobile=1 强制移动模式（桌面调试移动布局用） */
+const COARSE = (typeof location !== 'undefined' && /[?&]mobile=1/.test(location.search)) ||
+  (typeof matchMedia !== 'undefined' &&
+    (matchMedia('(pointer: coarse)').matches || (typeof window !== 'undefined' && 'ontouchstart' in window)));
+export const IS_COARSE = COARSE;
+export const MOBILE_ZOOM = COARSE ? 4 / 3 : 1;
+/* 移动端高度锁 270（= 640×360 放大 4/3），宽度按屏幕长宽比自适应（16:9 ~ 21:9 夹取）——
+ * 手机全面屏不再有黑边，也不裁切/变形 */
+const _aspect = (() => {
+  if (!COARSE || typeof window === 'undefined') return 16 / 9;
+  const l = Math.max(innerWidth, innerHeight), s = Math.min(innerWidth, innerHeight);
+  return Math.min(21 / 9, Math.max(16 / 9, l / Math.max(1, s)));
+})();
+export const VIEW_H = COARSE ? 270 : 360;
+export const VIEW_W = COARSE ? Math.round(270 * _aspect / 2) * 2 : 640;
 
 export const TUNE = {
   playerHp: 100, playerSpeed: 130,

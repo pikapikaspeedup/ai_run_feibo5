@@ -1,7 +1,7 @@
 /* =====================================================================
  * Canvas 渲染：世界 / 单位 / 子弹 / 特效 / 小地图
  * ===================================================================== */
-import { VIEW_W, VIEW_H, TUNE } from './constants.js';
+import { VIEW_W, VIEW_H, TUNE, MOBILE_ZOOM } from './constants.js';
 import { rand, dist, dist2, clamp } from './utils.js';
 import { WEAPONS } from './data/weapons.js';
 import { wdef } from './data/weapons.js';
@@ -774,13 +774,14 @@ function drawUnit(ctx, G, u) {
   const face = Math.cos(u.aim) >= 0 ? 1 : -1;
 
   /* 高清帧（加载完成后启用）：走路循环 + 衬衫换色 */
-  let spr = u.spr, scale = u.isBoss ? 2 : u.eliteType === 'overfit' ? 1.5 : u.isSummon ? .75 : 1;
+  /* 移动端全局放大 4/3 的例外：Boss 除以 MOBILE_ZOOM 保持原视觉大小（用户点名"都要大，除了 Boss"） */
+  let spr = u.spr, scale = u.isBoss ? 2 / MOBILE_ZOOM : u.eliteType === 'overfit' ? 1.5 : u.isSummon ? .75 : 1;
   if (HIFI.ready) {
     if (u.isBoss) {
       spr = HIFI.bossFrames[Math.floor(G.t * 2) % 2];
-      scale = 1.5;
+      scale = 1.5 / MOBILE_ZOOM;
       const bf = eliteFrame('boss_idle', G.t * 5);
-      if (bf) { spr = bf; scale = 44 / bf.height; }   // 九帧待机：喝咖啡/看手机/整理领带
+      if (bf) { spr = bf; scale = 44 / MOBILE_ZOOM / bf.height; }   // 九帧待机：喝咖啡/看手机/整理领带
     } else if (u.eliteType !== 'hallu' && !u.isMob) {
       const frames = workerFrames(u.shirt);
       if (frames) {
