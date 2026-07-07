@@ -96,8 +96,9 @@ export const PROP_VISUAL = {
   safe:           { dw: 40, dh: 48, ox: -2, oy: -12 },
 };
 
-/* T3 隐蔽半径：玩家进入后隐身 hiddenDur 秒 */
-export const T3_HIDE_RADIUS = 26;
+/* T3 隐蔽半径：玩家进入后隐身 hiddenDur 秒
+ * v2.8.4 26→60：原来基本要踩进花盆才触发，现在是一小片"草丛"（LoL 式） */
+export const T3_HIDE_RADIUS = 60;
 export const T3_HIDE_DUR = 1.5;
 
 /* T2 挡弹概率 */

@@ -3592,21 +3592,27 @@ export function update(dt) {
   propTick(G.obstacles);
   propTick(G.decor);
 
-  /* v2.0 T3 隐蔽：玩家进入 T3 obstacle 半径内隐身 1.5s，bot AI 会丢目标 */
+  /* v2.0 T3 隐蔽：玩家进入 T3 obstacle 半径内隐身 1.5s，bot AI 会丢目标
+   * v2.8.4 手动开枪 = 暴露（hideLockT 内贴绿植也无法再隐）；入隐飘字提示 */
   if (G.player.alive) {
     const pl = G.player;
+    const wasHidden = (pl.hiddenT || 0) > 0;
     pl.hiddenT = Math.max(0, (pl.hiddenT || 0) - dt);
-    const r2 = T3_HIDE_RADIUS * T3_HIDE_RADIUS;
-    for (const arr of [G.obstacles, G.decor]) {
-      for (const o of arr) {
-        if (o.destroyed || o.cover !== 'T3') continue;
-        if (dist2(pl.x, pl.y, o.sx + o.w / 2, o.sy + o.h / 2) < r2) {
-          pl.hiddenT = T3_HIDE_DUR;
-          break;
+    pl.hideLockT = Math.max(0, (pl.hideLockT || 0) - dt);
+    if (pl.hideLockT <= 0) {
+      /* 显式 found 标记——原来用 pl.hiddenT>0 当"已找到"哨兵，残留隐身也 >0，
+       * 会把 decor 数组里的绿植整个跳过，导致隐身时间锯齿衰减而非持续刷新 */
+      const r2 = T3_HIDE_RADIUS * T3_HIDE_RADIUS;
+      let inBush = false;
+      outer: for (const arr of [G.obstacles, G.decor]) {
+        for (const o of arr) {
+          if (o.destroyed || o.cover !== 'T3') continue;
+          if (dist2(pl.x, pl.y, o.sx + o.w / 2, o.sy + o.h / 2) < r2) { inBush = true; break outer; }
         }
       }
-      if (pl.hiddenT > 0) break;
+      if (inBush) pl.hiddenT = T3_HIDE_DUR;
     }
+    if (!wasHidden && pl.hiddenT > 0) addFloat(pl.x, pl.y - 26, '🌿 隐身了', '#7ee08a', 11, 1.3);
 
     /* v2.0 §3.3 走过即触发交互（design 说 F 键，用户要走过触发）：
      *   咖啡机 触碰即喝 → 回血，满血时转为少量护盾（单台库存 + 短 CD）
@@ -3687,7 +3693,7 @@ export function update(dt) {
           o._tipShown = true;
           const tips = [
             '📌 提示：桌子只挡子弹不挡人',
-            '📌 提示：贴绿植 1.5 秒可以隐身',
+            '📌 提示：站进绿植的虚线圈可以隐身，开枪会当场暴露',
             '📌 提示：碰到咖啡机可以喝一口回血，打爆还会掉回血光环',
             '📌 提示：老板保险柜里有传说 chip',
             '📌 提示：咖啡机不只在茶水区，开放办公区也能补血',
@@ -4142,6 +4148,12 @@ function updateUnit(u, dt) {
         touch.aimTarget = null;
         wantFire = mouse.down;
       }
+    }
+    /* v2.8.4 隐身纪律：隐身时自动扳机保持沉默（否则隐了个寂寞）；
+     * 手动开火 = 主动暴露，1.2s 内贴绿植也无法再隐。蓄力武器保持蓄力不松手 */
+    if (u.hiddenT > 0 && wantFire) {
+      if (!touch.using && mouse.down) { u.hiddenT = 0; u.hideLockT = 1.2; }
+      else wantFire = wdef(u).kind === 'charge' ? u.weapon.charging : false;
     }
   } else {
     const r = botThink(u, dt);

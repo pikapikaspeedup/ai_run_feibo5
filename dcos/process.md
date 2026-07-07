@@ -1393,3 +1393,11 @@
 
 - 自查发现: ①《向上管理事故报告》永不触发——文书判定用正则猜死因文本（/老板|考核官|Boss/），而小 Boss 实名"PPT 路演大魔王/绩效校准委员会"等全都匹配不上 → deathInfo 加结构化 byBoss/byZone 字段（killer.isBoss || eliteTier===2），buildReport 弃用字符串猜测；②win 判定 playerRank<=1 在初始 0 时活人误判金卡 → 收紧为 ===1；③结算双大数字窄屏加 flexWrap 保险。
 - Verification: 被"绩效校准委员会"击杀 → byBoss=true →《向上管理事故报告》正确出具 ✅；活人 rank0 不再金卡 ✅；build 通过；控制台零 error。
+
+## 2026-07-08 - 隐身体验三连修（v2.8.4）
+
+- 用户反馈：①隐身没有透明/不可见效果 ②绿植范围太小 ③隐身还会自动攻击。
+- 修复：①render 只处理了 sneakT 漏了 hiddenT——现在隐身画成半透明幽灵态（alpha≈.3 微脉动），入隐飘字"🌿 隐身了"；②T3_HIDE_RADIUS 26→60（原来要踩进花盆），绿植脚下加虚线范围圈（靠近浮现/站进加亮），公告板提示同步改写；③隐身纪律：自动/全托管扳机在隐身时保持沉默（蓄力武器保持蓄力不松手），手动开火=主动暴露并 1.2s 内不可再隐（hideLockT）。
+- 顺手揪出老 bug：T3 刷新外层循环用 pl.hiddenT>0 当"已找到"哨兵，残留隐身也>0，decor 数组里的绿植会被整个跳过 → 改显式 inBush 标记，隐身时间从锯齿衰减变持续刷新。
+- Verification: preview_eval——站圈内 1s 后 hiddenT 恒 1.5、离开残留衰减归零；全托管隐身 60 帧 0 发弹、手动开火 1 发且 hiddenT 立即 0/lock 0.72；截图确认虚线圈+半透明；控制台零 error；build 通过。
+- 坑复盘：vite 对 HMR 失效过的模块用 ?t= 时间戳 URL，裸 URL dynamic import 会拿到第二个模块实例（getG()=null）——重启 vite 后再验才同源。

@@ -164,7 +164,7 @@ for (const [key, src] of Object.entries({
   img.src = src;
 }
 /* v2.0 视觉/hitbox 共享自 data/obstacles.js（source of truth）*/
-import { PROP_VISUAL as PROP_SIZE } from './data/obstacles.js';
+import { PROP_VISUAL as PROP_SIZE, T3_HIDE_RADIUS } from './data/obstacles.js';
 
 /* v2.2 怪物高清贴图 drop-in 管线：把 mob_<sprKey>.png（可选 mob_<sprKey>_b.png 第二帧）
  * 放进 src/assets/generated/ 即自动替换字符画精灵，无文件时零开销回退字符画。
@@ -716,6 +716,27 @@ export function render(ctx) {
       ctx.fillRect(bx, by, bw * (o.hp / o.hpMax), 3);
     }
   };
+  /* v2.8.4 绿植隐身范围提示圈（地面层）：玩家靠近浮现虚线圈，站进去加亮——范围可读才有人用 */
+  if (G.player && G.player.alive) {
+    const pl = G.player;
+    ctx.save();
+    ctx.strokeStyle = '#7ee08a';
+    ctx.setLineDash([5, 5]);
+    ctx.lineDashOffset = -G.t * 12;
+    for (const arr of [G.obstacles, G.decor]) {
+      for (const o of arr) {
+        if (o.destroyed || o.cover !== 'T3') continue;
+        const px = o.sx + o.w / 2, py = o.sy + o.h / 2;
+        const d2 = (pl.x - px) * (pl.x - px) + (pl.y - py) * (pl.y - py);
+        if (d2 > 180 * 180) continue;
+        const inside = d2 < T3_HIDE_RADIUS * T3_HIDE_RADIUS;
+        ctx.globalAlpha = inside ? .55 : .2;
+        ctx.lineWidth = inside ? 2 : 1;
+        ctx.beginPath(); ctx.arc(px, py, T3_HIDE_RADIUS, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
   for (const o of G.obstacles) if (!o.destroyed || o.destroyedT > 0) drawables.push({ y: o.sy + 14, draw: () => drawProp(o, o.sx, o.sy) });
   /* decor 与 obstacles 同走 spawnProp，须传原始锚点 sx/sy——
    * d.x/d.y 是已加过 PROP_VISUAL ox/oy 的 hitbox 坐标，drawProp 内部会再加一次导致贴图偏移 */
@@ -988,6 +1009,7 @@ function drawUnit(ctx, G, u) {
   if (u.invulnT > 0) ctx.globalAlpha = .5 + .3 * Math.sin(G.t * 20);
   if (u.eliteType === 'hallu') ctx.globalAlpha = .55 + .35 * Math.sin(G.t * 17);
   if (u.sneakT > 0) ctx.globalAlpha = .38;   // v2.8 小报告匿名疾跑
+  if (u.hiddenT > 0) ctx.globalAlpha = .28 + .07 * Math.sin(G.t * 7);   // v2.8.4 贴绿植/临时下线隐身：半透明幽灵态
   ctx.translate(x, y + bob);
   ctx.scale(face, 1);
   if (u.isPlayer && (u.lieFlat || u.baiLanT > 0)) ctx.rotate(Math.PI / 2);   // v2.8 躺平/摆烂：整个人放倒
