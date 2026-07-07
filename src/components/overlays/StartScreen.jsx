@@ -156,15 +156,15 @@ export default function StartScreen() {
                 </div>
               ))}
               <div className="dex-sec">— 精英野怪（击杀必掉模组）—</div>
-              {Object.values(ELITES).filter(e => e.tier === 1).map(e => (
-                <div className="dex-row" key={e.name}>
+              {Object.entries(ELITES).filter(([, e]) => e.tier === 1).map(([id, e]) => (
+                <div className="dex-row" key={id}>
                   <span className="d-name" style={{ color: '#c58fff' }}>{e.name}</span>
                   <span className="d-pat">{e.dex}</span>
                 </div>
               ))}
               <div className="dex-sec">— 职场怪物·小 Boss（稀有，掉双倍模组+补给）—</div>
-              {Object.values(ELITES).filter(e => e.tier === 2).map(e => (
-                <div className="dex-row" key={e.name}>
+              {Object.entries(ELITES).filter(([, e]) => e.tier === 2).map(([id, e]) => (
+                <div className="dex-row" key={id}>
                   <span className="d-name" style={{ color: '#ff9440' }}>{e.name}</span>
                   <span className="d-pat">{e.dex}</span>
                 </div>

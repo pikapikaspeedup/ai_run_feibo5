@@ -165,6 +165,70 @@ export const MILESTONE_TRACKS = {
       },
     },
   ],
+  hrbp: [
+    {
+      id: 'hrbp_bigger_room',
+      name: '更大的会议室',
+      eff: tier => `PUA 气场半径 +${20 + tier * 5}px ，气场减伤额外 +${2 + tier}%`,
+      tag: '会议室越大，说出来的话越有分量。',
+      apply: (pl, tier) => {
+        pl.mods.puaAuraR = (pl.mods.puaAuraR || 0) + 20 + tier * 5;
+        pl.mods.puaAura += .02 + tier * .01;
+      },
+    },
+    {
+      id: 'hrbp_express_letter',
+      name: '加急挂号信',
+      eff: tier => `裁员函频率 +${15 + tier * 5}% ，函件伤害 +${20 + tier * 5}%`,
+      tag: '顺丰到付，签收即生效。',
+      apply: (pl, tier) => {
+        pl.mods.layoffLetterHaste = (pl.mods.layoffLetterHaste || 0) + .15 + tier * .05;
+        pl.mods.layoffLetterDmg = (pl.mods.layoffLetterDmg || 0) + .20 + tier * .05;
+      },
+    },
+    {
+      id: 'hrbp_quota_bonus',
+      name: '裁员指标超额',
+      eff: tier => `处决阈值 +${3 + tier}% ，击杀回血额外 +${1 + tier}`,
+      tag: '本季度超额完成，明年名额翻倍。',
+      apply: (pl, tier) => {
+        pl.mods.executeThreshold += .03 + tier * .01;
+        pl.mods.hrbpKillHeal += 1 + tier;
+      },
+    },
+  ],
+  reporter: [
+    {
+      id: 'reporter_bigger_screen',
+      name: '更大的投影幕',
+      eff: tier => `路演光锥更长更宽，光锥伤害 +${15 + tier * 5}%`,
+      tag: '幕布越大，问题越小。',
+      apply: (pl, tier) => {
+        pl.mods.coneShowLen = (pl.mods.coneShowLen || 0) + 25 + tier * 5;
+        pl.mods.coneShowDmg = (pl.mods.coneShowDmg || 0) + .15 + tier * .05;
+      },
+    },
+    {
+      id: 'reporter_gold_pointer',
+      name: '镀金激光笔',
+      eff: tier => `暴击率 +${4 + tier}% ，暴击伤害 +${10 + tier * 3}%`,
+      tag: '笔一亮出来，就知道是总监级汇报。',
+      apply: (pl, tier) => {
+        pl.mods.crit += .04 + tier * .01;
+        pl.mods.critDmg = (pl.mods.critDmg || 1.5) + .10 + tier * .03;
+      },
+    },
+    {
+      id: 'reporter_standing_ovation',
+      name: '全场起立鼓掌',
+      eff: tier => `向上汇报 buff 时长 +${1 + tier * .5}s ，年终述职冷却 -${8 + tier * 2}%`,
+      tag: '掌声持续的时间，就是你安全的时间。',
+      apply: (pl, tier) => {
+        pl.mods.uplevelDur = (pl.mods.uplevelDur || 0) + 1 + tier * .5;
+        pl.mods.annualHaste = (pl.mods.annualHaste || 0) + .08 + tier * .02;
+      },
+    },
+  ],
 };
 
 export function milestoneLabel(id) {

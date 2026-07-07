@@ -1,11 +1,17 @@
 /* WebAudio 合成音效 */
 let AC = null;
-let muted = false;
+/* v2.6.2 默认静音（办公室摸鱼场景第一原则：别出声）；用户手动开过声则记住偏好 */
+let muted = true;
+try { const v = localStorage.getItem('niuma_muted'); if (v !== null) muted = v === '1'; } catch (e) { /* ignore */ }
 let masterGain = null;
 let limiter = null;
 
 export const isMuted = () => muted;
-export function toggleMuted() { muted = !muted; return muted; }
+export function toggleMuted() {
+  muted = !muted;
+  try { localStorage.setItem('niuma_muted', muted ? '1' : '0'); } catch (e) { /* ignore */ }
+  return muted;
+}
 export function setMuted(v) { muted = v; }
 
 /* 供 bgm.js 接入同一条总线（复用限幅器），不新建 AudioContext */

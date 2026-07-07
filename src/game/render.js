@@ -419,6 +419,24 @@ export function render(ctx) {
         ctx.fillStyle = '#000'; ctx.fillText(nm, p.x - nm.length * 3.5 + 1, p.y + 13 + by);
         ctx.fillStyle = '#d9b3ff'; ctx.fillText(nm, p.x - nm.length * 3.5, p.y + 12 + by);
       }
+    } else if (p.type === 'badge') {
+      /* v2.5 职位工牌：金框挂绳工牌，粉杠 = HRBP、黄杠 = 大魔王翻页笔 */
+      const px = Math.round(p.x), py = Math.round(p.y + by);
+      const glow = .5 + .3 * Math.sin(G.t * 5);
+      ctx.globalAlpha = glow; ctx.strokeStyle = '#ffcf33';
+      ctx.beginPath(); ctx.arc(px, py, 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#14161d'; ctx.fillRect(px - 4, py - 6, 8, 11);
+      ctx.fillStyle = '#f2efe6'; ctx.fillRect(px - 3, py - 5, 6, 9);
+      ctx.fillStyle = p.badge === 'hrbp_talk' ? '#ff9edb' : '#ffcf33';
+      ctx.fillRect(px - 3, py - 5, 6, 3);
+      ctx.fillStyle = '#8a8271'; ctx.fillRect(px - 1, py - 8, 2, 2);   // 挂绳扣
+      if (G.player.alive && dist2(p.x, p.y, G.player.x, G.player.y) < 110 * 110) {
+        const nm = p.badge === 'hrbp_talk' ? 'HRBP工牌·E槽' : '大魔王翻页笔·E槽';
+        ctx.font = '7px monospace';
+        ctx.fillStyle = '#000'; ctx.fillText(nm, p.x - nm.length * 3.5 + 1, p.y + 15 + by);
+        ctx.fillStyle = '#ffcf33'; ctx.fillText(nm, p.x - nm.length * 3.5, p.y + 14 + by);
+      }
     } else if (p.type === 'heal') {
       /* 咖啡豆：小绿点 */
       ctx.fillStyle = '#14161d'; ctx.fillRect(Math.round(p.x - 2), Math.round(p.y - 2 + by), 5, 5);
@@ -725,6 +743,8 @@ export function render(ctx) {
     if (!G.trial.active && dist(G.player.x, G.player.y, z.cx, z.cy) > z.r) edgeArrow(ctx, G, z.cx, z.cy, '#ff4f4f');
     if (G.boss && G.boss.alive) edgeArrow(ctx, G, G.boss.x, G.boss.y, '#b665ff');
     for (const u of G.units) if (u.alive && u.eliteTier === 2) edgeArrow(ctx, G, u.x, u.y, '#ff9440');
+    /* v2.6.2 波次收尾指示：尾波残余怪（waveRush）画绿色边缘箭头——躲猫猫的最后几只一眼可寻 */
+    for (const u of G.units) if (u.alive && u.waveRush) edgeArrow(ctx, G, u.x, u.y, '#7ee08a');
     if (G.t < 25 && G.player.weapon.lvl === 1 && !G.player.weapon.leg) {
       let pc = null, pd = Infinity;
       for (const p of G.pickups) {
@@ -894,6 +914,31 @@ function drawUnit(ctx, G, u) {
     ctx.fillRect(x + 6, y - 16 + bob, 1, 3);
     ctx.fillRect(x + 5, y - 15 + bob, 3, 1);
   }
+  /* v2.5 AI 牛马物种徽标：头顶青色 AI 角标（无标=人类同事） */
+  if (u.species === 'ai' && !u.isPlayer && u.alive) {
+    ctx.fillStyle = 'rgba(10,14,18,.75)';
+    ctx.fillRect(x + 5, y - 26 + bob, 11, 7);
+    ctx.fillStyle = '#38d3e8';
+    ctx.font = 'bold 6px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('AI', x + 7, y - 20 + bob);
+  }
+  /* v2.5 HRBP 约谈可视化：头顶读条 + 到被约谈者的粉色连线 + 目标脚下警圈 */
+  if (u.eliteType === 'hrbp' && u.talkT > 0 && u.hrbpTarget && u.hrbpTarget.alive) {
+    const t = u.hrbpTarget, p = Math.min(1, u.talkT / 5);
+    ctx.save();
+    ctx.globalAlpha = .55;
+    ctx.strokeStyle = '#ff9edb'; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(x, y - 8); ctx.lineTo(t.x, t.y - 6); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(t.x, t.y + 1, 13 + Math.sin(G.t * 8) * 2, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = '#000'; ctx.fillRect(x - 15, y - 34, 30, 5);
+    ctx.fillStyle = '#ff9edb'; ctx.fillRect(x - 14, y - 33, 28 * p, 3);
+    ctx.fillStyle = '#ffd9ef'; ctx.font = '6px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('约谈中', x, y - 37);
+    ctx.textAlign = 'left';
+  }
   /* 副武器可视化：显示器回旋盾 / 碎纸机光环 */
   if (u.isPlayer && u.subs.monitor) {
     const s = u.subs.monitor;
@@ -904,6 +949,27 @@ function drawUnit(ctx, G, u) {
       ctx.fillStyle = '#14161d'; ctx.fillRect(mx - 4, my - 3, 8, 7);
       ctx.fillStyle = '#38b6d9'; ctx.fillRect(mx - 3, my - 2, 6, 4);
     }
+  }
+  /* v2.5 工位风水阵：站定展开的旋转罗盘圈（渐显渐隐 fengshuiT 0..1） */
+  if (u.isPlayer && u.fengshuiT > 0) {
+    const fr = 30, a0 = G.t * .8;
+    ctx.save();
+    ctx.globalAlpha = .5 * u.fengshuiT;
+    ctx.strokeStyle = '#ffe27a';
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.arc(x, y - 2, fr, a0, a0 + Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([2, 5]);
+    ctx.beginPath(); ctx.arc(x, y - 2, fr - 7, -a0, -a0 + Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = .75 * u.fengshuiT;
+    ctx.fillStyle = '#ffe27a';
+    ctx.font = '7px monospace'; ctx.textAlign = 'center';
+    for (let i = 0; i < 4; i++) {
+      const da = a0 + i * Math.PI / 2;
+      ctx.fillText('吉福旺禄'[i], x + Math.cos(da) * fr, y - 2 + Math.sin(da) * fr + 2);
+    }
+    ctx.textAlign = 'left';
+    ctx.restore();
   }
   if (u.isPlayer && u.subs.shredder) {
     const r = [42, 48, 56][u.subs.shredder.lv - 1];

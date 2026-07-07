@@ -58,7 +58,10 @@ function addFeed(text, hl) { bridge.emit('feed', { text, hl }); }
 function warn(text) { bridge.emit('warn', text); }
 
 export function addFloat(x, y, text, color, size = 7, life = .8) {
-  if (G) G.floats.push({ x, y, text, color, size, life, t: 0 });
+  if (!G) return;
+  /* v2.6.2 全局上限兜底：任何路径失控刷字最多堆 120 条（丢最老），杜绝"粉色瀑布"级事故 */
+  if (G.floats.length >= 120) G.floats.shift();
+  G.floats.push({ x, y, text, color, size, life, t: 0 });
 }
 export function addParts(x, y, color, n, spd = 60, life = .5) {
   if (!G) return;
@@ -109,6 +112,15 @@ function defaultMods() {
     /* 人设三·一人公司 OPC */
     contractorSummon: 0, summonDmg: 0, summonCdMul: 1, damageToSummon: 0,
     workstationCache: false, headhunter: false, contractorMatrix: false, severanceNuke: false,
+    /* v2.5 梗系可视化被动 */
+    woodenFish: false, gradParty: 0, chairDrift: 0, offClock: false,
+    readNoReply: 0, spiritStock: false, fengshuiRing: false, ctrlCV: false,
+    /* 人设六·HRBP 编外人力伙伴 */
+    puaAura: 0, puaAuraR: 0, hrbpKillHeal: 0, layoffLetter: 0,
+    layoffLetterHaste: 0, layoffLetterDmg: 0, forcedResign: false, layoffWave: false,
+    /* 人设七·PPT 路演大师 */
+    alignGrain: 0, coneShow: 0, coneShowLen: 0, coneShowDmg: 0,
+    uplevelBuff: 0, uplevelDur: 0, annualReport: false, annualHaste: 0,
     /* 觉醒专属标记位 */
     __evoDismissalChain: false, __evoOnlineOffline: false, __evoFakeDiligenceUpgrade: false,
     __evoOutsourceEmpire: false, __evoLayoffWave: false,
@@ -197,6 +209,7 @@ export const fireRateOf = u => {
 export const speedOf = u => {
   let s = u.spdBase * u.mods.spd * (u.buffs.spdT > 0 ? u.buffs.spdM : 1);
   if (u.mods.lowHpSpd && u.hp < maxHp(u) * .3) s *= 1 + u.mods.lowHpSpd;
+  if (G && G.evtHeatT > 0) s *= .85;   // v2.6.1 事件「空调坏了」：全场（含玩家）-15%
   if (u.beamFiring) s *= .5;
   if (u.curses.overfit > 0) s *= .6;
   if (u.empowerT > 0) s *= 1.15;
@@ -245,6 +258,7 @@ function newGame(trialMonths = 0) {
       fromR: 0, toR: 0, fromCx: 0, fromCy: 0, toCx: 0, toCy: 0, shrinkT: 0, dps: 1 },
     kills: 0, playerRank: 0, bossSpawned: false, bossDead: false, boss: null, turrets: [],
     chipT: 15, itemT: 12, techT: 20, eliteT: 35, minibossT: 95, incidentT: 55, incidentSeq: 0, pendingLevels: 0, hoverChip: null,
+    hrbpT: 50,   // v2.5 转正后首次绩效盘点（HRBP 登场）倒计时
     /* v2.0 Phase E · 5 种环境事件 CD 计时器 */
     sprinklerT: rand(90, 120), sprinklerActiveT: 0,
     blackoutT: rand(150, 200), blackoutActiveT: 0,
@@ -373,25 +387,26 @@ function newGame(trialMonths = 0) {
   g.units.push(player);
   g.player = player;
 
-  const names = shuffle(COPY.botNames).slice(0, TUNE.botCount);
-  /* v2.0 · 7 同事 AI 分型
-   *   juan(卷王)         : 高攻击力，主动索敌
-   *   norm(普通打工人)   : 中等
-   *   moyu(摸鱼大师)     : 见人就跑，只被逼才反击
-   *   veteran(老油条)    : 只抢残血目标（>70% hp 时逃避）
-   *   crony(关系户)      : 贴 Boss/精英 蹭击杀，命中差
-   *   outsource(外包)    : 高攻击欲但命中差
-   *   firefighter(救火队长): 优先冲公共事故
-   *   uptalk(向上管理)   : 只贴 buffs.dmgM > 1 的强者
-   * 池子按 GDD 权重分布：卷王6 普通6 摸鱼3 老油条2 关系户1 外包3 救火1 向上1 = 20 */
-  const persPool = shuffle([
-    ...Array(6).fill('juan'), ...Array(6).fill('norm'), ...Array(3).fill('moyu'),
-    ...Array(2).fill('veteran'), ...Array(1).fill('crony'), ...Array(3).fill('outsource'),
-    ...Array(1).fill('firefighter'), ...Array(1).fill('uptalk'),
+  /* v2.5 对手物种二分：人卷人 + 人卷 AI（不再是清一色 AI 机器人）
+   *   human(人类同事) 9 名：botNames 人名池，人格偏"人情世故"（摸鱼/老油条/向上管理/关系户）
+   *   ai(AI 牛马)    10 台：aiNames 池，人格偏"机械内卷"（卷王/外包/救火），命中更准（aimErr ×.75）
+   * v2.0 · 7 同事 AI 分型见下（juan 卷王 / norm 普通 / moyu 摸鱼 / veteran 老油条 /
+   * crony 关系户 / outsource 外包 / firefighter 救火 / uptalk 向上管理） */
+  const humanN = Math.floor((TUNE.botCount - 1) / 2);          // 19 → 9 人类
+  const aiN = TUNE.botCount - humanN;                          // 19 → 10 AI
+  const humanPers = shuffle(['moyu', 'moyu', 'moyu', 'veteran', 'veteran', 'uptalk', 'crony', 'norm', 'norm']);
+  const aiPers = shuffle(['juan', 'juan', 'juan', 'juan', 'juan', 'outsource', 'outsource', 'outsource', 'firefighter', 'norm']);
+  const roster = shuffle([
+    ...shuffle(COPY.botNames).slice(0, humanN).map((n, i) => ({ name: n, pers: humanPers[i % humanPers.length], species: 'human' })),
+    ...shuffle(COPY.aiNames).slice(0, aiN).map((n, i) => ({ name: n, pers: aiPers[i % aiPers.length], species: 'ai' })),
   ]);
+  const persErr = p => p === 'juan' ? .07 : p === 'norm' ? .13
+    : p === 'veteran' ? .12 : p === 'crony' ? .28
+    : p === 'outsource' ? .22 : p === 'firefighter' ? .10
+    : p === 'uptalk' ? .20 : .2;
   if (trialMonths > 0) {
     /* 试用期：同事还没到岗（转正日空降入场，届时按月数补发育） */
-    g.latentBots = names.map((n, i) => ({ name: n, pers: persPool[i % persPool.length] }));
+    g.latentBots = roster;
   } else {
     g.latentBots = null;
     for (let i = 0; i < TUNE.botCount; i++) {
@@ -401,15 +416,14 @@ function newGame(trialMonths = 0) {
         bx = W / 2 + Math.cos(a) * rr; by = W / 2 + Math.sin(a) * rr;
         if (g.units.every(u => dist2(u.x, u.y, bx, by) > 260 * 260)) break;
       }
-      const pers = persPool[i % persPool.length];
-      g.units.push(makeUnit(names[i], bx, by, { weaponId: pick(wIds), bot: {
-        pers, state: 'wander', wx: bx, wy: by, target: null, decideT: rand(0, .3),
-        aimErr: pers === 'juan' ? .07 : pers === 'norm' ? .13
-        : pers === 'veteran' ? .12 : pers === 'crony' ? .28
-        : pers === 'outsource' ? .22 : pers === 'firefighter' ? .10
-        : pers === 'uptalk' ? .20 : .2,
+      const rb = roster[i];
+      const u = makeUnit(rb.name, bx, by, { weaponId: pick(wIds), bot: {
+        pers: rb.pers, state: 'wander', wx: bx, wy: by, target: null, decideT: rand(0, .3),
+        aimErr: persErr(rb.pers) * (rb.species === 'ai' ? .75 : 1),
         chargeHold: 0, provokedT: 0, strafe: 1,
-      } }));
+      } });
+      u.species = rb.species;
+      g.units.push(u);
     }
   }
 
@@ -429,6 +443,16 @@ function randPosInZone(g, margin = .88) {
 }
 function spawnChip(g, id, lvl, x, y) {
   if (x === undefined) ({ x, y } = randPosInZone(g));
+  /* v2.6.1 金色时刻：2% 镀金芯片——直接 +2 级 + 金光柱 */
+  if (Math.random() < .02 && lvl < 5) {
+    lvl = Math.min(5, lvl + 2);
+    g.pickups.push({ type: 'chip', id, lvl, x, y, bob: rand(0, 6), gilded: true });
+    if (g === G) {
+      addFx({ type: 'levelupfx', x, y: y - 6, r: 18, life: .9 });
+      addFloat(x, y - 22, '✨ 镀金芯片！', '#ffcf33', 11, 2);
+    }
+    return;
+  }
   g.pickups.push({ type: 'chip', id, lvl, x, y, bob: rand(0, 6) });
 }
 const SURVIVAL_ITEM_IDS = [
@@ -674,6 +698,28 @@ function nearPlayer(x, y) {
   return G.player.alive && dist2(x, y, G.player.x, G.player.y) < 300 * 300;
 }
 
+/* v2.6 同事嘴替气泡：按物种抽语料，局内同一单位不重复同一句。
+ * 防刷屏三闸：单位冷却 8s / 全局 1s 窗口最多 2 条 / 屏幕外不发 */
+function bubble(u, key) {
+  if (!G || !u || !u.alive || u.isPlayer) return;
+  if ((u.bubbleCd || 0) > G.t) return;
+  if (G.bubbleGateT > G.t && G.bubbleGateN >= 2) return;
+  if (!nearPlayer(u.x, u.y)) return;
+  const pools = COPY.BUBBLES[key];
+  if (!pools) return;
+  const pool = pools[u.species === 'ai' ? 'ai' : 'human'] || pools.human;
+  if (!pool || !pool.length) return;
+  u.bubbleSaid = u.bubbleSaid || {};
+  const avail = pool.filter(t => !u.bubbleSaid[t]);
+  if (!avail.length) return;
+  const text = pick(avail);
+  u.bubbleSaid[text] = 1;
+  u.bubbleCd = G.t + 8;
+  if (G.bubbleGateT > G.t) G.bubbleGateN++;
+  else { G.bubbleGateT = G.t + 1; G.bubbleGateN = 1; }
+  addFloat(u.x, u.y - 24, `💬${text}`, '#dfe6f2', 9, 1.9);   // v2.6.1 字号 7→9、更亮、停留更久
+}
+
 function spawnBullet(u, a, opt = {}) {
   const def = wdef(u);
   const spd = (opt.spd || def.spd || 300) * u.mods.bulletSpd;
@@ -770,6 +816,9 @@ function chainZap(u, sx, sy, firstTarget, count, dmg, decay, stun = 0) {
 
 function updateWeapon(u, dt, wantFire, aimA) {
   const w = u.weapon, def = wdef(u);
+  /* v2.6.1 静音会议：非玩家被闭麦期间整段跳过开火逻辑
+   * （不能只压 wantFire=false——蓄力武器"松开即发射"，反而会被触发） */
+  if (u.muteFireT > 0 && !u.isPlayer) return;
   /* v2.4 玩家主武器弹标记专属贴图键（proj_<id>.png），函数尾清空防泄漏到副武器/炮台 */
   if (u.isPlayer) u._projKey = 'proj_' + w.id;
   w.cd -= dt * fireRateOf(u);
@@ -1233,6 +1282,19 @@ function fireProcs(source, hook, ctx) {
           applyDamage(ctx.attacker, (ctx.dmg || 5) * (p.pct || .3), source, { quiet: true, fromProc: true });
         }
         break;
+      case 'hrbpBlame':   // v2.5 HRBP「责任转移」：攻击者被甩锅致幻
+        if (ctx.attacker && ctx.attacker.alive && ctx.attacker !== source) {
+          applyCurse(ctx.attacker, 'hallu', 2.5);
+          if (nearPlayer(source.x, source.y)) addFloat(ctx.attacker.x, ctx.attacker.y - 18, '这锅是你的', '#ff9edb', 7, .9);
+        }
+        break;
+      case 'bigPie':      // v2.5 汇报大师「画大饼」：攻击者被饼致幻+灼伤
+        if (ctx.attacker && ctx.attacker.alive && ctx.attacker !== source) {
+          applyCurse(ctx.attacker, 'hallu', 2.5);
+          applyDamage(ctx.attacker, 4, source, { quiet: true, fromProc: true });
+          if (nearPlayer(source.x, source.y)) addFloat(ctx.attacker.x, ctx.attacker.y - 18, '🫓 先吃口饼', '#ffcf33', 7, .9);
+        }
+        break;
     }
   }
 }
@@ -1281,6 +1343,14 @@ function tryExecuteTarget(attacker, target, threshold, label = '处决标注') {
   if (!attacker || !attacker.isPlayer || !canExecuteTarget(target) || target.hp <= 0) return false;
   const mh = maxHp(target);
   if (mh <= 0 || target.hp / mh > threshold) return false;
+  /* v2.5 HRBP 人设「劝退话术」：处决时 35% 概率改为策反——不是裁你，是帮你找到新赛道 */
+  if (attacker.mods.forcedResign && !target.allyOwner && Math.random() < .35) {
+    target.allyOwner = attacker; target.allyUntil = G.t + 8;
+    target.hp = Math.min(mh, target.hp + mh * .25);   // 劝退成功还给点"赔偿"，不然一碰就死没意义
+    addFloat(target.x, target.y - 22, '💼 已被劝退：调转枪口', '#ff9edb', 9, 1.2);
+    if (nearPlayer(target.x, target.y)) addFeed(`${target.name} 被劝退话术拿下，暂时为你打工 8 秒`, true);
+    return true;
+  }
   addFloat(target.x, target.y - 22, label, '#ff9440', 9, 1);
   addParts(target.x, target.y, '#ff9440', 16, 100, .55);
   addFx({ type: 'executefx', x: target.x, y: target.y - 4, r: 16, life: .4 });   // 处决红 X
@@ -1376,7 +1446,12 @@ export function applyDamage(target, raw, attacker, opts = {}) {
     if (attacker._permaCurse && Math.random() < .25) applyCurse(target, attacker._permaCurse, 3);
     if (attacker._buggyProc && Math.random() < attacker._buggyProc) applyCurse(target, pick(['repeat', 'overflow', 'overfit']), 2.5);
   }
-  const dodgeChance = (target.mods.dodge || 0) + (target.isPlayer && target.opcMatrixT > 0 ? .12 : 0);
+  /* v2.5 HRBP 人设「PUA 气场」：被气场笼罩的敌人打出的伤害衰减 */
+  if (attacker && attacker.puaWeakT > 0 && attacker.puaWeakPct) raw *= Math.max(.5, 1 - attacker.puaWeakPct);
+  /* v2.5 精神股东：心理建设完毕，Boss 对你的伤害 -15% */
+  if (attacker && attacker.isBoss && target.isPlayer && target.mods.spiritStock) raw *= .85;
+  const dodgeChance = (target.mods.dodge || 0) + (target.isPlayer && target.opcMatrixT > 0 ? .12 : 0)
+    + (target.isPlayer && target.fengshuiDodgeT > 0 ? .10 : 0);   // v2.5 风水阵内闪避+10%
   if (dodgeChance > 0 && !inevitable && Math.random() < Math.min(.9, dodgeChance)) {
     addFloat(target.x, target.y - 14, '甩锅！', '#9aa4b5', 6, .5);
     /* 已读不回学：闪避成功后短暂提速 */
@@ -1533,6 +1608,11 @@ export function applyDamage(target, raw, attacker, opts = {}) {
     if (execThreshold > 0 && tryExecuteTarget(attacker, target, execThreshold)) return;
   }
   target.hurtT = .15;
+  /* v2.6 嘴替：被打抱怨（25%）+ 残血逃跑宣言（一次性，30% 血上升沿） */
+  if (target.bot) {
+    if (dmg > 5 && Math.random() < .25) bubble(target, 'hurt');
+    if (target.hp < maxHp(target) * .3 && !target._fleeSaid) { target._fleeSaid = true; bubble(target, 'flee'); }
+  }
   /* 只有重击（>5% 最大生命）才打断"站定"状态——蹭血不再无限打断带薪如厕 */
   if (dmg > maxHp(target) * .05) target.standT = 0;
   if (opts.stun) {
@@ -1600,6 +1680,18 @@ function killUnit(victim, killer, cause, opts = {}) {
     addFeed('你在工位晕倒，被同事扶到茶水间缓了缓', true);
     addParts(victim.x, victim.y, '#7ee08a', 16, 90, .6);
     SFX.hurt();
+    return;
+  }
+  /* v2.5 电子木鱼：30 功德自动兑换一次免死（可反复攒），排在一次性免死手段之前 */
+  if (victim.isPlayer && victim.mods.woodenFish && (victim.merit || 0) >= 30) {
+    victim.merit -= 30;
+    victim.hp = Math.max(1, maxHp(victim) * .3);
+    victim.invulnT = Math.max(victim.invulnT, 2);
+    addFx({ type: 'revivefx', x: victim.x, y: victim.y, r: 22, life: .85 });
+    addFloat(victim.x, victim.y - 24, '🪷 功德护体（-30 功德）', '#ffe27a', 10, 1.6);
+    addFeed('电子木鱼显灵：30 功德兑换一条命', true);
+    addParts(victim.x, victim.y, '#ffe27a', 20, 100, .7);
+    SFX.fuse();
     return;
   }
   if (victim.isPlayer && victim.mods.secondEntry && !victim.secondEntryUsed) {
@@ -1720,6 +1812,17 @@ function killUnit(victim, killer, cause, opts = {}) {
     }
     spawnTech(G, pickTechId(), victim.x, victim.y, rollTier(victim.eliteTier === 2));
     spawnXp(G, victim.x, victim.y, victim.eliteTier === 2 ? 20 : 10);
+    if (victim.eliteType === 'hrbp') {   // v2.5：优化掉 HRBP = 抢回 N+1 大礼包 + 他的工牌
+      for (let k = 0; k < 2; k++) spawnTech(G, pickTechId(), victim.x + rand(-14, 14), victim.y + rand(-14, 14), rollTier(true));
+      spawnItem(G, 'n1_package', victim.x + rand(-10, 10), victim.y + rand(-10, 10));
+      spawnXp(G, victim.x, victim.y, 25);
+      G.pickups.push({ type: 'badge', badge: 'hrbp_talk', x: victim.x + rand(-8, 8), y: victim.y - 6, bob: rand(0, 6) });
+      addFeed('🎉 HRBP 被优化了！全场牛马默哀 0.5 秒后自发鼓掌（N+1 大礼包 + 他的工牌掉了）', !!(killer && killer.isPlayer));
+    }
+    if (victim.eliteType === 'ppt') {    // v2.5：干掉 PPT 路演大魔王掉"翻页笔"——接任他的三连激光
+      G.pickups.push({ type: 'badge', badge: 'ppt_cone', x: victim.x + rand(-8, 8), y: victim.y - 6, bob: rand(0, 6) });
+      if (killer && killer.isPlayer) addFeed('🖱️ 大魔王的翻页笔掉了——捡起来，下一场路演你来讲', true);
+    }
     if (victim.eliteTier === 2) {   // 小 Boss 掉双倍模组（品级上偏）+ 消耗品
       spawnTech(G, pickTechId(), victim.x + rand(-12, 12), victim.y + rand(-12, 12), rollTier(true));
       spawnItem(G, undefined, victim.x + rand(-14, 14), victim.y + rand(-14, 14));
@@ -1795,12 +1898,84 @@ function killUnit(victim, killer, cause, opts = {}) {
     }
     /* v18: onKill proc 触发（杂鱼击杀也算，让"每击杀触发"类效果在割草时也生效） */
     if (!opts.fromProc && killer.mods && killer.mods.procs) fireProcs(killer, 'onKill', { victim });
+    /* v2.5 电子木鱼：任何击杀都敲一声，攒功德（每 5 声飘一次计数防刷屏） */
+    if (killer.isPlayer && killer.mods.woodenFish) {
+      killer.merit = (killer.merit || 0) + 1;
+      if (killer.merit % 5 === 0 || killer.merit >= 30)
+        addFloat(killer.x, killer.y - 24, `🪷 功德 ${killer.merit}/30`, '#ffe27a', 8.5, 1.1);
+      if (nearPlayer(victim.x, victim.y)) SFX.pickup();
+    }
+    /* v2.5 Ctrl+C/Ctrl+V：杂鱼击杀也要能粘贴分身（放在 isMob return 之前，割草时才爽） */
+    if (killer.isPlayer && killer.mods.ctrlCV && Math.random() < .08) {
+      const s = spawnOpcSummon(killer, 'clone', { life: 6 });
+      if (s) addFloat(killer.x, killer.y - 22, '📋 Ctrl+V：已粘贴同事', '#9ad1ff', 10, 1.4);
+    }
+    /* v2.6.1 金色时刻：1% 年度优秀员工——金彩带 + 双倍掉落 */
+    if (killer.isPlayer && !victim.isMob && !victim.isSummon && Math.random() < .01) {
+      warn('🏆 年度优秀员工诞生（遗憾离场）：掉落翻倍');
+      addParts(victim.x, victim.y - 6, '#ffcf33', 26, 130, 1);
+      addFloat(victim.x, victim.y - 30, '🏆 年度优秀员工', '#ffcf33', 13, 2.2);
+      spawnTech(G, pickTechId(), victim.x + rand(-14, 14), victim.y + rand(-14, 14), rollTier(true));
+      spawnItem(G, undefined, victim.x + rand(-12, 12), victim.y + rand(-12, 12));
+      spawnXp(G, victim.x, victim.y, 15);
+    }
+    /* v2.6.2 全量击杀计数（含杂鱼）：HRBP 自证等"杀过人没有"类判定用它，
+     * 不用 killer.kills——那个只统计牛马/精英，割草杀杂鱼不算就冤了 */
+    killer.anyKills = (killer.anyKills || 0) + 1;
+    /* v2.6 连杀高光（任何击杀都算，窗口 2.5s）+ 单帧多杀"一锅端" */
+    if (killer.isPlayer) {
+      killer.killStreak = (killer.streakT || 0) > G.t ? (killer.killStreak || 0) + 1 : 1;
+      killer.streakT = G.t + 2.5;
+      const s = killer.killStreak;
+      if (s === 5) addFloat(killer.x, killer.y - 28, '🔥 卷出水平了', '#ffcf33', 12, 1.6);
+      else if (s === 10) { warn('🔥 10 连杀：这位更是重量级'); cam.shake = Math.max(cam.shake, 4); }
+      else if (s === 15) {
+        warn('👑 15 连杀：卷王之王，当之无愧');
+        for (const w of G.units) if (w.bot && w.alive && Math.random() < .4) bubble(w, 'final');
+      } else if (s === 20) { warn('🚀 20 连杀：建议公司直接上市'); addParts(killer.x, killer.y - 10, '#ffcf33', 30, 130, 1); }
+      else if (s === 30) { warn('🌋 30 连杀：卷到 CEO 当场退位'); cam.shake = Math.max(cam.shake, 6); addParts(killer.x, killer.y - 10, '#ff9440', 40, 150, 1.2); }
+      if (G.frameKillT === G.t) G.frameKillN++;
+      else { G.frameKillT = G.t; G.frameKillN = 1; }
+      if (G.frameKillN === 5) {
+        addFloat(victim.x, victim.y - 30, '🍲 一锅端！', '#ff9440', 14, 1.8);
+        addParts(victim.x, victim.y, '#ff9440', 18, 110, .8);
+        cam.shake = Math.max(cam.shake, 3);
+      }
+      /* 处决三连 */
+      if (opts.executed) {
+        killer.execStreak = (killer.execStreakT || 0) > G.t ? (killer.execStreak || 0) + 1 : 1;
+        killer.execStreakT = G.t + 4;
+        if (killer.execStreak === 3) addFloat(killer.x, killer.y - 26, '📝 裁员名单又划掉三行', '#ff6a6a', 11, 1.6);
+      }
+    }
+    /* v2.6 嘴替：bot 击杀 worker 后说两句（跨物种嘲讽优先） */
+    if (killer.bot && !victim.isMob && !victim.isSummon && Math.random() < .5) {
+      bubble(killer, victim.species && killer.species && victim.species !== killer.species ? 'crossKill' : 'kill');
+    }
     if (victim.isMob) {
       /* 波次计数已上移到死亡通用段（任何死因都算），这里只留击杀音效 */
       if (killer.isPlayer) SFX.hit();
       return;   // 杂鱼不进击杀数/连杀/播报
     }
     killer.kills++;
+    /* v2.5 梗被动·击杀侧演出（对杂鱼击杀也生效的在 return 前，这里只管"数得上的"击杀） */
+    if (killer.isPlayer && killer.mods.gradParty > 0 && (victim.isElite || opts.executed)) {
+      addParts(victim.x, victim.y - 8, '#ff9edb', 10, 120, .8);
+      addParts(victim.x, victim.y - 8, '#7ac8ff', 10, 120, .8);
+      addParts(victim.x, victim.y - 8, '#ffe27a', 10, 120, .8);
+      addFloat(victim.x, victim.y - 26, '🎓 恭喜毕业！', '#ffcf33', 12, 1.6);
+      killer.buffs.spdT = Math.max(killer.buffs.spdT, 2);
+      killer.buffs.spdM = Math.max(killer.buffs.spdM, 1 + .12 * killer.mods.gradParty);
+    }
+    /* v2.5 HRBP 人设「优化提成」：击杀回血 */
+    if (killer.mods.hrbpKillHeal > 0 && killer.alive)
+      killer.hp = Math.min(maxHp(killer), killer.hp + killer.mods.hrbpKillHeal);
+    /* v2.5 汇报大师「向上汇报」：击杀精英/小Boss后伤害 buff */
+    if (killer.mods.uplevelBuff > 0 && (victim.isElite || victim.isBoss)) {
+      killer.buffs.dmgT = Math.max(killer.buffs.dmgT, 5 + (killer.mods.uplevelDur || 0));
+      killer.buffs.dmgM = Math.max(killer.buffs.dmgM, 1 + .12 * killer.mods.uplevelBuff);
+      if (killer.isPlayer) addFloat(killer.x, killer.y - 24, '📊 已向上汇报：伤害提升', '#ffcf33', 8, 1.2);
+    }
     if (killer.mods.dropChance && Math.random() < killer.mods.dropChance)
       spawnItem(G, undefined, victim.x + rand(-10, 10), victim.y + rand(-10, 10));
     if (killer.isPlayer) {
@@ -1825,12 +2000,20 @@ function killUnit(victim, killer, cause, opts = {}) {
     /* 老板的小兵：击杀原来完全静默（计数在涨但没有任何播报），玩家以为没统计 */
     if (killer && killer.isPlayer) addFeed(`✂️ 优化了老板的走狗 ${victim.name}`, true);
   } else if (!victim.isHR && !victim.isElite && !victim.isMob) {
-    if (cause === 'zone') addFeed(`${victim.name} 被裁员红线优化了`, victim.isPlayer);
+    /* v2.5 物种化措辞：AI 牛马被"下架释放算力"，人类同事被"优化" */
+    const isAI = victim.species === 'ai';
+    if (cause === 'resign') addFeed(`💼 ${victim.name} 被 HRBP 约谈到位，含泪「主动离职」（N+1 没拿到）`, false);
+    else if (cause === 'headhunt') addFeed(`📱 ${victim.name} 接了个电话，涨薪 50% 光速跑路（羡慕）`, false);
+    else if (cause === 'zone') addFeed(isAI ? `${victim.name} 越界运行，被红线下架回收` : `${victim.name} 被裁员红线优化了`, victim.isPlayer);
     else if (cause === 'burn') addFeed(`${victim.name} 倒在了画的饼里`, victim.isPlayer);
     else if (cause === 'inject') addFeed(`${victim.name} 提示词失效，精神崩溃离职`, false);
     else if (killer && killer.isMob) addFeed(`${victim.name} 被${killer.name}淹没了（没熬过试用期琐事）`, victim.isPlayer);
     else if (killer && killer.isElite) addFeed(`${victim.name} 被 ${killer.name} 带走了`, victim.isPlayer);
-    else if (killer) addFeed(`${killer.name} 用「${killer.weapon.leg ? LEGENDS[killer.weapon.leg].name : WEAPONS[killer.weapon.id].name}」优化了 ${victim.name}`, victim.isPlayer || killer.isPlayer);
+    else if (killer) addFeed(
+      isAI
+        ? `${killer.name} 用「${killer.weapon.leg ? LEGENDS[killer.weapon.leg].name : WEAPONS[killer.weapon.id].name}」下架了 ${victim.name}（算力已释放）`
+        : `${killer.name} 用「${killer.weapon.leg ? LEGENDS[killer.weapon.leg].name : WEAPONS[killer.weapon.id].name}」优化了 ${victim.name}`,
+      victim.isPlayer || killer.isPlayer);
   }
 
   if (victim.isPlayer) {
@@ -1888,6 +2071,7 @@ export function gainXp(u, amt) {
       const pool = SKILLS.filter(s => !s.persona && (u.skills[s.id] || 0) < s.max && (!s.valid || s.valid(u)));
       if (pool.length) applySkill(u, pick(pool));
       u.hp = Math.min(maxHp(u), u.hp + 15);
+      if (u.bot && Math.random() < .4) bubble(u, 'levelup');   // v2.6 升职感言
     }
   }
 }
@@ -1901,7 +2085,12 @@ export function applySkill(u, s) {
 }
 
 function useItem(u, id) {
-  const boost = u.mods.itemBoost;
+  let boost = u.mods.itemBoost;
+  /* v2.6.1 金色时刻：2% 这单免费——效果翻倍 */
+  if (u.isPlayer && Math.random() < .02) {
+    boost *= 2;
+    addFloat(u.x, u.y - 26, '🧧 这单免费：红包已到账', '#ffcf33', 10, 2);
+  }
   const F = n => Math.round(n * boost);
   const healWithOverflowShield = (rawHeal, shieldRate = .5) => {
     const mh = maxHp(u);
@@ -2044,6 +2233,20 @@ export function applyTechPickup(u, id, tier = 1) {
 }
 
 /* ---------- 人设四/五：控场反噬 + 摸鱼位移流的周期性状态机（仅玩家） ---------- */
+/* v2.5 玩家光锥（汇报大师专用）：复用敌方 PPT 大师的扇形结算 + coneflash 演出 */
+function castPlayerCone(u, ang, dmg, len, spread, stun) {
+  addFx({ type: 'coneflash', x: u.x, y: u.y, ang, spread, len, color: '#ffe9b0', life: .25 });
+  for (const t of G.units) {
+    if (!isFoe(u, t)) continue;
+    if (dist(u.x, u.y, t.x, t.y) > len) continue;
+    let da = Math.atan2(t.y - u.y, t.x - u.x) - ang;
+    while (da > Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    if (Math.abs(da) < spread) applyDamage(t, dmg, u, stun ? { stun } : undefined);
+  }
+  if (nearPlayer(u.x, u.y)) SFX.hit();
+}
+
 function updatePersonaSkills(u, dt) {
   /* 办公室政治：内耗标记倒计时，到点溅射给最近另一敌人 */
   if (u.politicsT > 0) {
@@ -2098,6 +2301,12 @@ function updatePersonaSkills(u, dt) {
    * 假勤奋真怠工改用独立计时 fdIdleT——原来两技能共用 noHitT，假勤奋每 8s 清零一次，认证永远卡在 1 层 */
   u.noHitT += dt;
   u.fdIdleT = (u.fdIdleT || 0) + dt;
+  /* v2.6.1 无伤 60s 称号（一次性/局，自嘲向） */
+  if (u.noHitT >= 60 && !u._standMasterSaid) {
+    u._standMasterSaid = true;
+    addFloat(u.x, u.y - 28, '🏅 称号获得：带薪站桩大师', '#9aa4b5', 11, 2.4);
+    addFeed('60 秒无伤达成：这个班上得毫发无损', true);
+  }
   if (u.mods.uptimeCertRate) {
     const layers = Math.min(5, Math.floor(u.noHitT / 5));
     if (layers > 0) {
@@ -2153,6 +2362,123 @@ function updatePersonaSkills(u, dt) {
         explodeAtNoRecurse(u.x, u.y, u.mods.__evoFubaoField ? 155 : 120, dmg, u, '#ff9440');
         addFloat(u.x, u.y - 26, '血债清算', '#ff9440', 10, 1.2);
       }
+    }
+  }
+
+  /* ===== v2.5 梗系可视化被动运行时 ===== */
+  if (u.mods.offClock) {
+    u.offClockT = (u.offClockT ?? 45) - dt;
+    if (u.offClockT <= 0) {
+      u.offClockT = 45;
+      u.offClockBuffT = 8;
+      addFloat(u.x, u.y - 30, '🔔 到点了！假装要下班', '#7ee08a', 12, 1.8);
+      addFeed('下班闹钟准点响起：牛马短暂变鹿（8 秒）', true);
+      SFX.levelup();
+    }
+    if (u.offClockBuffT > 0) {
+      u.offClockBuffT -= dt;
+      u.buffs.spdT = Math.max(u.buffs.spdT, .3); u.buffs.spdM = Math.max(u.buffs.spdM, 1.25);
+      u.buffs.fireT = Math.max(u.buffs.fireT, .3); u.buffs.fireM = Math.max(u.buffs.fireM, 1.15);
+      if (Math.random() < dt * 14) addParts(u.x - 6, u.y + 2, '#7ee08a', 1, 40, .3);   // 下班速度线
+    }
+  }
+  if (u.mods.fengshuiRing) {
+    u.fengshuiDodgeT = Math.max(0, (u.fengshuiDodgeT || 0) - dt);
+    if (u.standT > 1.2) {
+      u.fengshuiT = Math.min(1, (u.fengshuiT || 0) + dt * 3);   // 渐显
+      u.hp = Math.min(maxHp(u), u.hp + 2 * dt);
+      u.fengshuiDodgeT = .3;   // render 画圈 + applyDamage 加闪避的判据
+    } else u.fengshuiT = Math.max(0, (u.fengshuiT || 0) - dt * 5);
+  }
+  if (u.mods.readNoReply > 0) {
+    /* 上升沿统一拦截所有举报/点名来源：概率直接掰掉 */
+    if (u.reportedT > 0 && (u._prevReportedT || 0) <= 0) {
+      if (Math.random() < Math.min(.8, u.mods.readNoReply)) {
+        u.reportedT = 0;
+        addFloat(u.x, u.y - 26, '已读 ✓✓', '#9aa4b5', 9, 1.3);
+        addFeed('举报消息已读不回，标记自动过期', true);
+      }
+    }
+    u._prevReportedT = u.reportedT;
+  }
+
+  /* ===== v2.5 人设六 HRBP：PUA 气场 / 裁员函速递 / 季度大裁员 ===== */
+  if (u.mods.puaAura > 0) {
+    u.puaTickT = (u.puaTickT || 0) - dt;
+    if (u.puaTickT <= 0) {
+      u.puaTickT = .5;
+      const r = 110 + (u.mods.puaAuraR || 0);
+      for (const t of G.units) {
+        if (!isFoe(u, t) || dist2(u.x, u.y, t.x, t.y) > r * r) continue;
+        t.puaWeakT = .7;
+        t.puaWeakPct = Math.min(.35, u.mods.puaAura);
+      }
+    }
+  }
+  if (u.mods.layoffLetter > 0) {
+    u.letterT = (u.letterT || 0) - dt;
+    if (u.letterT <= 0) {
+      u.letterT = (7 - u.mods.layoffLetter) / (1 + (u.mods.layoffLetterHaste || 0));
+      const t = nearestUnit(u.x, u.y, 300, o => isFoe(u, o));
+      if (t) {
+        spawnBullet(u, leadAim(u.x, u.y, t, 270),
+          { dmg: 14 * (1 + (u.mods.layoffLetterDmg || 0)) * u.mods.dmg, spd: 270, range: 340,
+            shape: 'doc', color: '#ff9edb', curse: { id: 'hallu', dur: 2.5 } });
+        if (nearPlayer(u.x, u.y)) addFloat(u.x, u.y - 20, '📨 裁员函已寄出', '#ff9edb', 7, .8);
+      }
+    }
+  }
+  if (u.mods.layoffWave) {
+    u.layoffWaveT = (u.layoffWaveT || 40) - dt;
+    if (u.layoffWaveT <= 0) {
+      u.layoffWaveT = 40;
+      const targets = G.units
+        .filter(t => isFoe(u, t) && Math.abs(t.x - u.x) < VIEW_W / 2 && Math.abs(t.y - u.y) < VIEW_H / 2)
+        .sort((a, b) => a.hp / maxHp(a) - b.hp / maxHp(b))
+        .slice(0, 3);
+      for (const t of targets) {
+        addFx({ type: 'ringwarn', x: t.x, y: t.y, r: 34, life: 1.2, color: '#ff9edb' });
+        const tt = t;
+        delay(() => {
+          if (!tt.alive) return;
+          applyDamage(tt, 38 * u.mods.dmg, u);
+          tt.oaSlowT = Math.max(tt.oaSlowT || 0, 2);
+          addFloat(tt.x, tt.y - 20, '集体约谈', '#ff9edb', 8, 1);
+        }, 1.2);
+      }
+      if (targets.length) { addFloat(u.x, u.y - 26, '📋 季度大裁员启动', '#ff9edb', 10, 1.4); SFX.deny(); }
+    }
+  }
+
+  /* ===== v2.5 人设七 PPT 路演大师：对齐颗粒度 / 路演光锥 / 年终述职 ===== */
+  if (u.mods.alignGrain > 0 && u.standT > .8) {
+    u.buffs.fireT = Math.max(u.buffs.fireT, .3);
+    u.buffs.fireM = Math.max(u.buffs.fireM, 1 + u.mods.alignGrain);
+  }
+  if (u.mods.coneShow > 0) {
+    u.coneShowT = (u.coneShowT || 0) - dt;
+    if (u.coneShowT <= 0) {
+      u.coneShowT = 8 - u.mods.coneShow;
+      castPlayerCone(u, u.aim, 16 * (1 + (u.mods.coneShowDmg || 0)) * u.mods.dmg,
+        130 + (u.mods.coneShowLen || 0), .5, .4);
+    }
+  }
+  if (u.mods.annualReport) {
+    u.annualT = (u.annualT ?? 55) - dt;
+    if (u.annualT <= 0) {
+      u.annualT = 55 * (1 - (u.mods.annualHaste || 0));
+      let hit = 0;
+      for (const t of G.units) {
+        if (!isFoe(u, t) || Math.abs(t.x - u.x) > VIEW_W / 2 || Math.abs(t.y - u.y) > VIEW_H / 2) continue;
+        applyDamage(t, 22 * u.mods.dmg, u, { stun: .8 });
+        hit++;
+      }
+      u.buffs.dmgT = Math.max(u.buffs.dmgT, 4);
+      u.buffs.dmgM = Math.max(u.buffs.dmgM, 1.3);
+      addFx({ type: 'nukefx', x: u.x, y: u.y - 8, r: 60, life: .8 });
+      addFloat(u.x, u.y - 28, `📊 年终述职：全场 ${hit} 人被迫听完`, '#ffcf33', 11, 1.6);
+      cam.shake = Math.max(cam.shake, 5);
+      SFX.explo();
     }
   }
   u.overworkCd = Math.max(0, (u.overworkCd || 0) - dt);
@@ -2420,6 +2746,7 @@ function startTrialSubWave(idx) {
   const comp = tr.subWaveDefs && tr.subWaveDefs[idx - 1];
   tr.subWave = idx;
   tr.subWaveKilled = 0;
+  tr.waveStuckT = 0; tr.waveAuditT = 2;   // v2.6.2 收尾保险计时器随波重置
   tr.subWavePool = [];
   tr.subWaveSpawnT = idx === 1 ? .3 : .5;   // 首波开局稍等，2/3 波多给点喘息
   let target = 0;
@@ -2442,6 +2769,7 @@ export function update(dt) {
   G.t += dt;
   BGM.refreshPlayingTrack(G);   // 试用期/正式大逃杀/老板战之间的 BGM 切轨，幂等，开销可忽略
   /* 游戏内延迟任务结算（暂停/升级期间自然冻结，回调里再排新任务也安全） */
+  if (G.evtHeatT > 0) G.evtHeatT -= dt;   // v2.6.1 空调坏了倒计时
   if (G.delayed && G.delayed.length) {
     const due = G.delayed.filter(d => G.t >= d.at);
     if (due.length) {
@@ -2518,6 +2846,27 @@ export function update(dt) {
         }
       }
     }
+    /* v2.6.2 波次收尾三保险：躲避型怪（小偷避玩家/钓鱼邮件风筝）曾把尾波拖成
+     * 全图躲猫猫——实测卡死在 54/56 永远无法转正。
+     * ①清场狂暴：pool 空 && 剩 ≤5 只 → 全部标记 waveRush（主动冲向玩家+带边缘箭头）
+     * ②对账兜底：击杀数+存活数 < 目标（任何路径的怪凭空消失）→ 直接补账
+     * ③超时加速：pool 空 25s 还没清完 → 无条件全场 waveRush */
+    if (tr.subWave > 0 && !tr.bossThisWave && !tr.monthDone && tr.subWavePool.length === 0) {
+      tr.waveAuditT = (tr.waveAuditT ?? 2) - dt;
+      if (tr.waveAuditT <= 0) {
+        tr.waveAuditT = 2;
+        const waveMobs = G.units.filter(u2 => u2.alive && u2.isMob && u2.trialSubWave === tr.subWave);
+        if (tr.subWaveKilled + waveMobs.length < tr.subWaveTarget) {
+          tr.subWaveKilled = tr.subWaveTarget - waveMobs.length;   // 对账：消失的怪视为已清
+        }
+        tr.waveStuckT = (tr.waveStuckT || 0) + 2;
+        if ((waveMobs.length > 0 && waveMobs.length <= 5) || tr.waveStuckT >= 25) {
+          let newly = 0;
+          for (const u2 of waveMobs) if (!u2.waveRush) { u2.waveRush = true; newly++; }
+          if (newly > 0) addFeed('⏰ 快下班了：剩余琐事不再躲猫猫，主动找上门来', true);
+        }
+      }
+    } else tr.waveStuckT = 0;
     /* 本波清完（pool 空 && 击杀达标）→ 推进 */
     if (tr.subWave > 0 && !tr.bossThisWave && !tr.monthDone
         && tr.subWavePool.length === 0 && tr.subWaveKilled >= tr.subWaveTarget) {
@@ -2684,6 +3033,54 @@ export function update(dt) {
     }
   }
 
+  /* v2.6 办公室随机事件引擎：转正后每 45~75s 抽一个（不重复上一个），
+   * 横幅 + 演出 + 短暂规则改变——每一局的"剧本"都不同 */
+  if (!tr.active && G.player.alive) {
+    if (G.officeEvent) {
+      G.officeEvent.t -= dt;
+      const def = OFFICE_EVENTS.find(e => e.id === G.officeEvent.id);
+      if (def && def.tick) def.tick(dt);
+      if (G.officeEvent.t <= 0) { if (def && def.end) def.end(); G.officeEvent = null; }
+    } else {
+      G.officeEventT = (G.officeEventT ?? rand(30, 50)) - dt;
+      if (G.officeEventT <= 0) {
+        G.officeEventT = rand(45, 75);
+        const pool = OFFICE_EVENTS.filter(e => e.id !== G.lastOfficeEvent && (!e.cond || e.cond()));
+        if (pool.length) {
+          const ev = pick(pool);
+          G.lastOfficeEvent = ev.id;
+          G.officeEvent = { id: ev.id, t: ev.dur };
+          warn('📋 ' + ev.name);
+          ev.start();
+        }
+      }
+    }
+    /* 摸鱼碎嘴：每 4s 抽一个屏内 bot，30% 概率发呆发言 */
+    G.idleBubbleT = (G.idleBubbleT ?? 4) - dt;
+    if (G.idleBubbleT <= 0) {
+      G.idleBubbleT = 4;
+      const cands = G.units.filter(u => u.bot && u.alive && nearPlayer(u.x, u.y));
+      if (cands.length && Math.random() < .3) bubble(pick(cands), 'idle');
+    }
+    /* 决赛圈全场感言（一次性） */
+    if (G.zone.phase >= 3 && !G.finalBubbled) {
+      G.finalBubbled = true;
+      for (const u of G.units) if (u.bot && u.alive && Math.random() < .5) bubble(u, 'final');
+    }
+  }
+
+  /* v2.5 HRBP 绩效盘点：转正后周期登场，锁定绩效垫底者（含玩家）搞 PUA 约谈裁员。
+   * 场上同时只有一位；存活牛马太少（≤3，决赛圈）就不来添乱了 */
+  if (!tr.active && !G.units.some(u => u.alive && u.eliteType === 'hrbp')) G.hrbpT -= dt;
+  if (G.hrbpT <= 0) {
+    G.hrbpT = rand(70, 95);
+    if (aliveWorkers() > 3 && G.player.alive) {
+      const u = spawnElite('hrbp', G.player);
+      u.hrbpTarget = hrbpPickTarget();
+      addFeed('📋 HRBP 到场：本季度绩效盘点开始，垫底的同学请注意', true);
+    }
+  }
+
   /* v2.0 公共事故：转正后（试用期结束）正式阶段出现，处理成功给 KPI，失败涨锅值 */
   if (!tr.active && G.player.alive) {
     G.incidentT -= dt;
@@ -2838,6 +3235,11 @@ export function update(dt) {
         if (o._nextRing <= 0) {
           o._nextRing = 45; o._openT = 3;
           if (nearPlayer(o.x, o.y)) addFloat(o.x, o.y - 16, '🛗 电梯到了', '#38d3e8', 8, 1.2);
+          /* v2.6.1 金色时刻：3% 电梯惊喜——一屋子奶茶滚出来 */
+          if (Math.random() < .03) {
+            for (let k = 0; k < 3; k++) spawnItem(G, 'teambuild_milktea', o.x + rand(-6, o.w + 6), o.y + o.h + rand(4, 22));
+            addFloat(o.x + o.w / 2, o.y - 26, '🧋 开门惊喜：一电梯奶茶！', '#ffcf33', 10, 2);
+          }
         }
         if (o._callT > 0 && G.t - (o._lastCallTouch || 0) > .25) o._callT = 0;   // 人走了，呼叫作废
       }
@@ -2900,9 +3302,12 @@ export function update(dt) {
         if (o.spr === 'coffee_machine' && pl._coffeeCd <= 0 && (o._coffeeCd || 0) <= 0 &&
             (o._coffeeUses || 0) < (TUNE.coffeeMachineUses || 4)) {
           const mh = maxHp(pl);
-          const heal = TUNE.coffeeMachineHeal || 16;
+          /* v2.6.1 金色时刻：5% 隐藏菜单——三倍恢复 */
+          const hidden = Math.random() < .05;
+          const heal = (TUNE.coffeeMachineHeal || 16) * (hidden ? 3 : 1);
           const shield = TUNE.coffeeMachineShield || 0;
           if (pl.hp < mh || (shield && (pl.shield || 0) < shield)) {
+            if (hidden) addFloat(pl.x, pl.y - 26, '☕ 隐藏菜单：店长说这杯请你', '#ffcf33', 10, 2);
             const beforeHp = pl.hp;
             pl.hp = Math.min(mh, pl.hp + heal);
             const gained = Math.round(pl.hp - beforeHp);
@@ -3203,6 +3608,7 @@ function updateUnit(u, dt) {
     u._px = u.x; u._py = u.y;
   }
   u.hurtT -= dt; u.invulnT -= dt; u.stunT -= dt;
+  if (u.muteFireT > 0) u.muteFireT -= dt;   // v2.6.1 静音会议闭麦
   /* 通用限时状态衰减 */
   if (u.debuffImmuneT > 0) { u.debuffImmuneT -= dt; u.oaSlowT = 0; u.reportedT = Math.min(u.reportedT, 0); }
   if (u.noSplitT > 0) u.noSplitT -= dt;
@@ -3721,6 +4127,15 @@ function spawnBoss() {
   G.boss = b; G.bossSpawned = true;
   warn('📢 紧急通知：老板亲自下场了！');
   addFeed('老板 带着期权和大饼进场了', true);
+  /* v2.5 精神股东：Boss 登场先嘲讽一轮，心理建设完毕（对你伤害 -15%，见 applyDamage） */
+  if (G.player.alive && G.player.mods.spiritStock) {
+    delay(() => {
+      if (!G.player.alive || !b.alive) return;
+      addFloat(G.player.x, G.player.y - 26, '💬 "这个季度我不看好你"', '#7ac8ff', 10, 1.8);
+      addFloat(b.x, b.y - 34, '💢', '#ff6a6a', 12, 1.2);
+      addFeed('精神股东发言完毕：已对老板完成心理建设', true);
+    }, 1.2);
+  }
   SFX.boss(); addShake(6);
 }
 function spawnHR(x, y) {
@@ -4076,6 +4491,24 @@ export function castActive(slot = 'q') {
     }
     addFloat(pl.x, pl.y - 20, '来都来了！', '#ffcf33', 9, 1);
     SFX.explo();
+  } else if (id === 'talk_invite') {
+    /* v2.5 HRBP·绩效约谈：点名最近敌人重伤+眩晕+易伤 */
+    const t = nearestUnit(pl.x, pl.y, 260, o => isFoe(pl, o));
+    if (t) {
+      addFx({ type: 'ringwarn', x: t.x, y: t.y, r: 26, life: .4, color: '#ff9edb' });
+      applyDamage(t, def.dmg[lv - 1] * pl.mods.dmg, pl, { stun: lv >= 3 ? 1.4 : 1 });
+      t.vulnT = Math.max(t.vulnT || 0, 2.5);
+      t.vulnBonus = Math.max(t.vulnBonus || 0, .2);
+      addFloat(t.x, t.y - 22, '📋 被约谈', '#ff9edb', 9, 1.2);
+      SFX.deny();
+    } else addFloat(pl.x, pl.y - 16, '附近没有可约谈对象', '#9aa4b5', 7, .7);
+  } else if (id === 'demo_day') {
+    /* v2.5 汇报大师·现场演示：三连光锥（0.25s 间隔） */
+    const dmg = def.dmg[lv - 1] * pl.mods.dmg;
+    const spread = lv >= 3 ? .62 : .5;
+    castPlayerCone(pl, pl.aim, dmg, 140 + (pl.mods.coneShowLen || 0), spread, .4);
+    for (let i = 1; i <= 2; i++)
+      delay(() => pl.alive && castPlayerCone(pl, pl.aim, dmg, 140 + (pl.mods.coneShowLen || 0), spread, .4), i * .25);
   } else if (id === 'force_mute') {
     /* 强制五分钟静音：扇形范围眩晕+减速+碰撞体积临时增大制造互相卡位 */
     const r = def.range[lv - 1];
@@ -4222,6 +4655,65 @@ export function castActive(slot = 'q') {
     if (lv >= 3) pl.hp = Math.min(maxHp(pl), pl.hp + 18);
     addFloat(pl.x, pl.y - 20, '我同步一下：成果复用', '#ffcf33', 8, 1);
     SFX.pickup();
+  } else if (id === 'hrbp_talk') {
+    /* v2.5 裁员约谈（HRBP 工牌技）：约谈周围 N 个敌人——
+     * 杂鱼低血线直接"劝退"离职（处决）、精英扣 % 最大生命+易伤、Boss 心理暴击+减速 */
+    const R0 = [150, 175, 200][lv - 1];
+    const nMax = [3, 4, 5][lv - 1];
+    const execPct = [.4, .5, .6][lv - 1];
+    const elitePct = [.12, .15, .18][lv - 1];
+    const bossDmg = [90, 130, 170][lv - 1];
+    const foes = G.units
+      .filter(t => isFoe(pl, t) && t.alive && dist2(pl.x, pl.y, t.x, t.y) < R0 * R0)
+      .sort((a, b) => dist2(pl.x, pl.y, a.x, a.y) - dist2(pl.x, pl.y, b.x, b.y))
+      .slice(0, nMax);
+    if (!foes.length) {
+      addFloat(pl.x, pl.y - 16, '没有可约谈对象', '#9aa4b5', 7, .7);
+      pl.activeECd = 1;   // 空放不吃满冷却
+    } else {
+      for (const t of foes) {
+        addFx({ type: 'beam', x1: pl.x, y1: pl.y - 4, x2: t.x, y2: t.y - 4, w: 2, color: '#ff9edb', life: .35 });
+        if (t.isBoss) {
+          applyDamage(t, bossDmg * pl.mods.dmg, pl);
+          t.oaSlowT = Math.max(t.oaSlowT || 0, 2);
+          addFloat(t.x, t.y - 26, '老板心态受损', '#ff9edb', 9, 1.2);
+        } else if (t.isElite || t.isHR) {
+          applyDamage(t, Math.min(240, maxHp(t) * elitePct) * pl.mods.dmg, pl);
+          t.vulnT = Math.max(t.vulnT || 0, 2); t.vulnBonus = Math.max(t.vulnBonus || 0, .25);
+          addFloat(t.x, t.y - 24, '绩效存疑，易伤！', '#ff9edb', 8, 1);
+        } else if (t.hp <= maxHp(t) * execPct) {
+          addFloat(t.x, t.y - 22, '💼 被约谈到主动离职', '#ff9edb', 8, 1.2);
+          killUnit(t, pl);
+        } else {
+          applyDamage(t, (26 + 12 * lv) * pl.mods.dmg, pl);
+          t.oaSlowT = Math.max(t.oaSlowT || 0, 1.2);
+        }
+      }
+      addFloat(pl.x, pl.y - 24, `“${pick(COPY.hrbpLines)}”`, '#ff9edb', 8, 1.4);
+      addFx({ type: 'boom', x: pl.x, y: pl.y, r: R0, color: '#ff9edb', life: .35 });
+      SFX.execute ? SFX.execute() : SFX.hit();
+    }
+  } else if (id === 'ppt_cone') {
+    /* v2.5 路演光锥（大魔王翻页笔）：朝准星三连激光横扫——0.55s 预警后引爆，穿透+眩晕
+     * 完整复刻 T2_PATTERNS.ppt 的攻防节奏，只是这次讲 PPT 的人是你 */
+    const L = [180, 210, 240][lv - 1];
+    const D = [70, 100, 140][lv - 1];
+    const base = pl.aim;
+    const x0 = pl.x, y0 = pl.y;
+    for (let i = 0; i < 3; i++) {
+      const ang = base + (i - 1) * .5;
+      const x2 = x0 + Math.cos(ang) * L, y2 = y0 + Math.sin(ang) * L;
+      addFx({ type: 'beam', x1: x0, y1: y0, x2, y2, w: 2, color: '#ffcf33', life: .55 });
+      delay(() => {
+        if (!pl.alive) return;
+        addFx({ type: 'beam', x1: x0, y1: y0, x2, y2, w: 9, color: '#ff4f4f', life: .18 });
+        for (const t of G.units)
+          if (isFoe(pl, t) && t.alive && distToSeg(t.x, t.y, x0, y0, x2, y2) < 9 + t.r)
+            applyDamage(t, D * pl.mods.dmg, pl, { stun: .8 });
+        SFX.laser();
+      }, .55);
+    }
+    addFloat(pl.x, pl.y - 22, '这一页很关键！', '#ffcf33', 9, 1.1);
   } else if (id === 'pull_meeting') {
     /* 先拉个会：一圈拽到身前 + 眩晕 + 700ms 后爆炸 */
     const r = def.radius[lv - 1];
@@ -4388,9 +4880,10 @@ function spawnLateBots() {
     }
     const u = makeUnit(lb.name, bx, by, { weaponId: pick(wIds), bot: {
       pers: lb.pers, state: 'wander', wx: bx, wy: by, target: null, decideT: rand(0, .4),
-      aimErr: lb.pers === 'juan' ? .07 : lb.pers === 'norm' ? .13 : .2,
+      aimErr: (lb.pers === 'juan' ? .07 : lb.pers === 'norm' ? .13 : .2) * (lb.species === 'ai' ? .75 : 1),
       chargeHold: 0, provokedT: 0, strafe: 1,
     } });
+    u.species = lb.species;
     /* v18：追赶发育强化——原公式让同事只到 Lv.6-7、1 模组，DPS 只有玩家 10-15%，PVP 不成立
      * 现调整目标：同事 DPS ≈ 玩家 40-60%，转正后 PVP 才有真实交火 */
     u.weapon.lvl = clamp(2 + months, 2, 5);   // 3月档从 Lv.4 直接到 Lv.5
@@ -4544,7 +5037,7 @@ function updateMob(u, dt) {
    * 钓鱼邮件保距射手：原条件 !u.trialSubWave 与它唯一的生成路径（试用期波次）互斥，
    * 远程射手机制从未在任何对局出现过。保距目标 230px 仍在玩家可打范围内，波次不会卡。
    * v2.2：PUA 大师复用本分支（fireBulletVuln 弹=画的饼，命中挂易伤） */
-  if (m.keepDist && (m.fireBulletSlow || m.fireBulletVuln)) {
+  if (m.keepDist && (m.fireBulletSlow || m.fireBulletVuln) && !u.waveRush) {
     u.mobFireCd = (u.mobFireCd ?? m.fireCd) - dt;
     const px = G.player.x, py = G.player.y;
     const dPl = Math.hypot(u.x - px, u.y - py);
@@ -4552,7 +5045,16 @@ function updateMob(u, dt) {
     if (Math.abs(dPl - optimalDist) > m.keepDistTol) {
       const away = dPl < optimalDist;   // 太近就往外挪
       const a = Math.atan2(py - u.y, px - u.x) + (away ? Math.PI : 0);
+      const px0 = u.x, py0 = u.y;
       moveWithCollide(u, Math.cos(a), Math.sin(a), dt);
+      /* v2.6.2 贴墙检测：后撤被墙/地图边卡住（位移≈0）→ 切向绕行，
+       * 不再缩在墙角扭动——玩家追进死角它会沿墙溜走，追逐有来有回 */
+      if (away && dist2(u.x, u.y, px0, py0) < .25) {
+        u.strafeDir = u.strafeDir || (Math.random() < .5 ? 1 : -1);
+        const ta = a + Math.PI / 2 * u.strafeDir;
+        moveWithCollide(u, Math.cos(ta), Math.sin(ta), dt);
+        if (dist2(u.x, u.y, px0, py0) < .25) u.strafeDir *= -1;   // 这边也堵死就换向
+      }
     } else {
       moveWithCollide(u, 0, 0, dt);
     }
@@ -4622,7 +5124,7 @@ function updateMob(u, dt) {
     /* 冷却/超距期间落到普通追击路径 */
   }
   /* 工资小偷：满场偷吃经验豆（吃进肚里），被玩家逼近就跑；死亡吐 1.5 倍（见 killUnit） */
-  if (m.thief) {
+  if (m.thief && !u.waveRush) {   // v2.6.2 收尾狂暴时小偷不再躲猫猫，走通用追击
     u.mobHitT -= dt;
     let bag = null, bd2 = 420 * 420;
     for (const p2 of G.pickups) {
@@ -5034,9 +5536,302 @@ function updateBoss(u, dt) {
   }
 }
 
+/* ---------- v2.6 办公室随机事件表（P0 前 8 个，见 dcos/meme-density-design.md） ----------
+ * 约定：start() 一次性施加（尽量复用现有状态字段），tick(dt) 持续逻辑，end() 收尾播报 */
+const OFFICE_EVENTS = [
+  { id: 'boss_patrol', name: '💼 老板巡楼：都在啊？', dur: 3,
+    start() {
+      for (const u of G.units) {
+        if (!u.alive || u.isBoss) continue;
+        u.oaSlowT = Math.max(u.oaSlowT || 0, 3);
+        if (u.bot && nearPlayer(u.x, u.y)) addFloat(u.x, u.y - 28, '💼', '#e8e4d8', 9, 1.4);
+      }
+    },
+    end() { addFeed('老板走了，继续卷', false); } },
+
+  { id: 'server_down', name: '🖥️ 服务器崩了：503 Service Unavailable', dur: 2.5,
+    cond: () => G.units.filter(u => u.alive && u.species === 'ai').length >= 2,
+    start() {
+      let n = 0;
+      for (const u of G.units) {
+        if (!u.alive || u.isPlayer || u.species !== 'ai') continue;
+        u.stunT = Math.max(u.stunT, 2.5);
+        addParts(u.x, u.y - 8, '#ffcf33', 6, 80, .5);
+        n++;
+      }
+      addFeed(`全场 ${n} 台 AI 牛马宕机 2.5 秒：人类的复仇窗口`, true);
+    } },
+
+  { id: 'milk_tea', name: '🧋 下午茶到了：行政请客，手慢无', dur: 1,
+    start() {
+      for (let i = 0; i < randi(5, 8); i++) {
+        const p = randPosInZone(G, .5);
+        spawnItem(G, pick(['iced_americano', 'teambuild_milktea', 'overtime_redbull']), p.x, p.y);
+        addFx({ type: 'pickupfx', x: p.x, y: p.y, r: 12, life: .6 });
+      }
+    } },
+
+  { id: 'team_photo', name: '📸 团建合影：来，看镜头——茄子！', dur: 1.2,
+    start() {
+      const p = randPosInZone(G, .4);
+      for (const u of G.units) {
+        if (!u.alive || u.isPlayer || u.isBoss || u.isSummon) continue;
+        const a = rand(0, Math.PI * 2), rr = rand(12, 64);
+        u.x = clamp(p.x + Math.cos(a) * rr, 30, TUNE.world - 30);
+        u.y = clamp(p.y + Math.sin(a) * rr, 30, TUNE.world - 30);
+        u.stunT = Math.max(u.stunT, 1.2);
+      }
+      addFx({ type: 'nukefx', x: p.x, y: p.y - 10, r: 46, life: .5 });
+      cam.shake = Math.max(cam.shake, 3);
+      addFeed('全员被拉去合影 1.2 秒——现在，动手的机会来了', true);
+    } },
+
+  { id: 'payday', name: '💰 工资到账：请查收', dur: 1,
+    start() {
+      for (let i = 0; i < randi(10, 14); i++) {
+        const p = randPosInZone(G, .55);
+        spawnXp(G, p.x, p.y, randi(4, 8));
+      }
+      for (const u of G.units) if (u.bot && u.alive && Math.random() < .5) bubble(u, 'salary');
+    } },
+
+  { id: 'big_pie', name: '🫓 老板画饼：明年，上市！', dur: 3,
+    start() {
+      for (const u of G.units) {
+        if (!u.alive || u.isPlayer || u.isBoss || !(u.bot || u.isMob)) continue;
+        applyCurse(u, 'hallu', 3);
+      }
+      addFx({ type: 'bosspiefx', x: G.player.x, y: G.player.y - 34, r: 30, life: .9 });
+      addFeed('全场敌人被大饼砸中（口径混乱 3 秒），你早就吃腻了免疫', true);
+    } },
+
+  { id: 'admin_check', name: '🔍 行政查工位：这些东西谁的？——你的了', dur: 8,
+    tick(dt) {
+      const pl = G.player;
+      for (const p of G.pickups) {
+        const d = dist(p.x, p.y, pl.x, pl.y);
+        if (d < 300 && d > 8) { p.x += (pl.x - p.x) / d * 130 * dt; p.y += (pl.y - p.y) / d * 130 * dt; }
+      }
+    },
+    start() { addFeed('8 秒内全场物资向你聚拢——行政帮你收拾工位', true); } },
+
+  { id: 'double_quota', name: '⚡ 双倍配额时刻：全员冲刺', dur: 6,
+    start() {
+      for (const u of G.units) {
+        if (!u.alive) continue;
+        u.buffs.fireT = Math.max(u.buffs.fireT, 6);
+        u.buffs.fireM = Math.max(u.buffs.fireM, 1.4);
+      }
+      addFeed('全场（包括你）射速 +40%，6 秒弹幕狂欢', true);
+    } },
+
+  /* ===== v2.6.1 P1 八件套 ===== */
+  { id: 'fire_drill', name: '🚨 消防演习：这不是演习（是演习）', dur: 8,
+    tick(dt) {
+      for (const u of G.units) {
+        if (!u.alive || u.isBoss) continue;
+        if (u.standT > 1) {
+          applyDamage(u, 3 * dt, null, { cause: 'zone', quiet: true });
+          if (Math.random() < dt * 3) addParts(u.x, u.y - 10, '#ff6a6a', 1, 40, .3);
+        }
+      }
+    },
+    start() { addFeed('8 秒内站着不动会持续掉血——全员动起来！', true); },
+    end() { addFeed('消防演习结束，各回各的工位', false); } },
+
+  { id: 'melon_drop', name: '🍉 大瓜降临：吃瓜群众变成瓜', dur: 6,
+    cond: () => G.units.some(u => u.bot && u.alive && !u.allyOwner),
+    start() {
+      const b = pick(G.units.filter(u => u.bot && u.alive && !u.allyOwner));
+      b.reportedT = Math.max(b.reportedT, 6);   // 复用"被举报全场集火"机制
+      addFloat(b.x, b.y - 30, '🍉', '#7ee08a', 16, 2);
+      addFeed(`大瓜主角：${b.name}——全场都冲着他去了`, false);
+      bubble(b, 'hrbp');
+    } },
+
+  { id: 'net_lag', name: '📶 网络故障：甲方：视频怎么卡了', dur: 4,
+    start() {
+      for (const p of G.projs) { p.vx *= .5; p.vy *= .5; }   // 已在飞的立刻卡顿
+      addFeed('4 秒内所有子弹半速飞行——近战和激光的黄金窗口', true);
+    } },
+
+  { id: 'ac_broken', name: '🥵 空调坏了：物业正在派单', dur: 6,
+    start() {
+      G.evtHeatT = 6;
+      for (const u of G.units) if (u.bot && u.alive && Math.random() < .3) bubble(u, 'heat');
+    } },
+
+  { id: 'elevator_jam', name: '🛗 电梯故障：挤电梯失败的都在这了', dur: 1,
+    cond: () => G.obstacles.some(o => !o.destroyed && o.spr === 'elevator'),
+    start() {
+      const ele = pick(G.obstacles.filter(o => !o.destroyed && o.spr === 'elevator'));
+      const foes = shuffle(G.units.filter(u => u.alive && !u.isPlayer && !u.isBoss && (u.bot || u.isMob))).slice(0, 3);
+      for (const f of foes) {
+        f.x = clamp(ele.x + rand(-20, 40), 30, TUNE.world - 30);
+        f.y = clamp(ele.y + rand(10, 40), 30, TUNE.world - 30);
+        f.stunT = Math.max(f.stunT, .8);
+        addFx({ type: 'teleportfx', x: f.x, y: f.y - 6, r: 14, life: .5 });
+      }
+      addFeed('3 个倒霉蛋被塞进故障电梯又吐了出来', false);
+    } },
+
+  { id: 'mute_meeting', name: '🤫 静音会议：全员闭麦', dur: 2.5,
+    start() {
+      for (const u of G.units) {
+        if (!u.alive || u.isPlayer || u.isBoss) continue;
+        u.muteFireT = Math.max(u.muteFireT || 0, 2.5);
+      }
+      addFeed('全场敌人被闭麦 2.5 秒（不能开火）——你有麦克风权限', true);
+    } },
+
+  { id: 'headhunt', name: '📱 猎头来电：涨薪 50%？马上到', dur: 1.5,
+    cond: () => G.units.some(u => u.bot && u.alive && !u.allyOwner && u.hp < maxHp(u) * .5),
+    start() {
+      const b = pick(G.units.filter(u => u.bot && u.alive && !u.allyOwner && u.hp < maxHp(u) * .5));
+      addFloat(b.x, b.y - 26, '💬涨薪 50%？马上到', '#dfe6f2', 9, 1.9);
+      const bb = b;
+      delay(() => { if (bb.alive) killUnit(bb, null, 'headhunt'); }, 1.4);
+    } },
+
+  { id: 'weekly_time', name: '📝 周报时间：全场罕见休战', dur: 6,
+    tick(dt) {
+      for (const u of G.units) {
+        if (!u.alive || u.isBoss || u.isMob) continue;
+        if (u.standT > .5) u.hp = Math.min(maxHp(u), u.hp + 2 * dt);
+      }
+    },
+    start() {
+      for (const u of G.units) if (u.bot && u.alive && Math.random() < .35) bubble(u, 'weekly');
+      addFeed('6 秒内站定的牛马都在补周报（缓慢回血）——难得的和平', true);
+    } },
+];
+
+/* ---------- v2.5 HRBP：人力业务伙伴（绩效盘点巡场官） ----------
+ * 不打人（除非被打疼暴走），只做三件事：找绩效垫底的 → PUA 约谈读条 → 劝退。
+ * bot 被读满条 = "主动离职"（不算任何人击杀）；玩家被读满条 = 心理暴击 + 口径混乱。
+ * 反制：①约谈期间打掉他 12% 血 → 暴走成可杀精英（掉 N+1 大礼包）；
+ *       ②被约谈者当场击杀任意敌人 → "绩效重新评估"换人。 */
+function hrbpPickTarget() {
+  const pool = G.units.filter(x => x.alive && !x.isMob && !x.isElite && !x.isSummon && !x.isBoss && !x.isHR && !x.allyOwner
+    && (x.hrbpImmuneT || 0) <= G.t);   // v2.6.2 跳过自证/刚被谈完的豁免期目标
+  if (!pool.length) return null;
+  pool.sort((a, b) => (a.kills || 0) - (b.kills || 0) || a.level - b.level);
+  return pool[0];
+}
+function updateHrbp(u, dt) {
+  /* 暴走态：摘工牌开打——裁员函三连弹（沾幻觉诅咒） */
+  if (u.hrbpAngry) {
+    const foe = (u.hrbpFoe && u.hrbpFoe.alive) ? u.hrbpFoe
+      : nearestUnit(u.x, u.y, 620, o => o.alive && !o.isMob && !o.isElite && !o.isSummon && !o.isBoss && !o.isHR && !o.allyOwner);
+    if (!foe) { moveWithCollide(u, 0, 0, dt); return; }
+    u.hrbpFoe = foe;
+    const a = Math.atan2(foe.y - u.y, foe.x - u.x);
+    u.aim = a;
+    const d = dist(u.x, u.y, foe.x, foe.y);
+    moveWithCollide(u, d > 130 ? Math.cos(a) : 0, d > 130 ? Math.sin(a) : 0, dt);
+    u.hrbpAtkT = (u.hrbpAtkT || 0) - dt;
+    if (u.hrbpAtkT <= 0 && d < 280) {
+      u.hrbpAtkT = 1.5;
+      for (let i = -1; i <= 1; i++)
+        spawnBullet(u, a + i * .17, { dmg: 9 * u.mods.dmg, spd: 250, range: 310, shape: 'streak', color: '#ff9edb', curse: { id: 'hallu', dur: 3.5 } });
+      if (nearPlayer(u.x, u.y)) addFloat(u.x, u.y - 24, `“${pick(COPY.hrbpLines)}”`, '#ff9edb', 7, 1.1);
+    }
+    return;
+  }
+  /* 完成指标离场：走向最近地图边，出界静默消失（不算击杀不掉东西） */
+  if (u.hrbpLeaving) {
+    const ex = u.x < TUNE.world / 2 ? -60 : TUNE.world + 60;
+    const a = Math.atan2(0, ex - u.x);
+    moveWithCollide(u, Math.cos(a), Math.sin(a), dt);
+    if (u.x < 20 || u.x > TUNE.world - 20) { u.alive = false; u.hp = 0; }
+    return;
+  }
+  /* 目标维护：死亡/失效/豁免期重选；没人可谈就离场
+   * v2.6.2 自证豁免：刚用击杀自证过的目标 8s 内不再被锁——否则割草玩家会陷入
+   * "开始约谈→击杀中断→立刻重锁→又开始"的每帧循环，feed 和飘字全线刷屏 */
+  if (!u.hrbpTarget || !u.hrbpTarget.alive || (u.hrbpTarget.hrbpImmuneT || 0) > G.t) {
+    u.hrbpTarget = hrbpPickTarget();
+    u.talkT = 0;
+  }
+  const t = u.hrbpTarget;
+  if (!t) { u.hrbpLeaving = true; return; }
+  const d = dist(u.x, u.y, t.x, t.y);
+  const a = Math.atan2(t.y - u.y, t.x - u.x);
+  u.aim = a;
+
+  /* v2.6.2 滞回阈值：开始约谈 <58px，中断需要 >78px——阈值边界抖动曾造成
+   * "别跑，就聊五分钟"每两帧刷一条的粉色瀑布；语录本身再加 4s 冷却兜底 */
+  if (d > (u.talkT > 0 ? 78 : 58)) {
+    if (u.talkT > 0) {
+      u.talkT = 0;
+      if (nearPlayer(u.x, u.y) && (u.quipCd || 0) < G.t) {
+        u.quipCd = G.t + 4;
+        addFloat(u.x, u.y - 24, '别跑，就聊五分钟', '#ff9edb', 8, 1.2);
+      }
+    }
+    moveWithCollide(u, Math.cos(a), Math.sin(a), dt);
+    return;
+  }
+  /* —— 约谈读条（5s）—— */
+  if (!(u.talkT > 0)) {   // undefined/NaN/0 都视为"未开始"（undefined<=0 是 false，别踩）
+    u.talkT = 0.0001;
+    u.talkKills0 = t.anyKills || 0;   // v2.6.2 用全量击杀（含杂鱼）：清琐事也是绩效
+    u.talkHp0 = u.hp;
+    if ((u.talkFeedCd || 0) < G.t) {   // v2.6.2 开场播报 3s 冷却，防重复开始刷 feed
+      u.talkFeedCd = G.t + 3;
+      addFeed(`📋 HRBP 开始约谈绩效垫底的 ${t.name}${t.isPlayer ? '——就是你！打断他，或当场杀一个自证绩效' : ''}`, t.isPlayer);
+    }
+    if (t.bot) bubble(t, 'hrbp');   // v2.6 被锁定的同事惊呼
+  }
+  u.talkT += dt;
+  moveWithCollide(u, 0, 0, dt);
+  t.oaSlowT = Math.max(t.oaSlowT || 0, .3);   // 被按在工位上聊
+  u.puaT = (u.puaT || 0) - dt;
+  if (u.puaT <= 0) {
+    u.puaT = 1.2;
+    applyDamage(t, 2.5, u);                    // 心理伤害，按秒扣
+    if (nearPlayer(u.x, u.y)) addFloat(t.x, t.y - 26, `“${pick(COPY.hrbpLines)}”`, '#ff9edb', 7, 1.3);
+  }
+  /* 反制②：当场击杀自证（含杂鱼）→ 目标获 8s 约谈豁免（见上方目标维护注释） */
+  if ((t.anyKills || 0) > u.talkKills0) {
+    u.talkT = 0;
+    t.hrbpImmuneT = G.t + 8;
+    u.hrbpTarget = hrbpPickTarget();
+    addFeed(`📈 ${t.name} 当场击杀自证绩效，HRBP 重新评估名单（8 秒内不再盯你）`, t.isPlayer);
+    return;
+  }
+  /* 反制①：约谈期间被打疼 → 暴走 */
+  if (u.talkHp0 - u.hp > maxHp(u) * .12) {
+    u.hrbpAngry = true; u.talkT = 0;
+    addFeed('💢 HRBP 被打断约谈，摘下工牌暴走了——干掉他，掉 N+1 大礼包', true);
+    return;
+  }
+  /* 读满条：裁员生效 */
+  if (u.talkT >= 5) {
+    u.talkT = 0;
+    if (t.isPlayer) {
+      applyDamage(t, 22, u);
+      t.curses.hallu = Math.max(t.curses.hallu || 0, 6);
+      t.oaSlowT = Math.max(t.oaSlowT, 3);
+      t.hrbpImmuneT = G.t + 10;   // v2.6.2 谈完给 10s 喘息，不立刻重锁同一人
+      addFloat(t.x, t.y - 26, '😵 你开始怀疑上班的意义…', '#ff9edb', 10, 1.6);
+      addFeed('💼 你被 HRBP 完整 PUA 了一轮：心理暴击 + 口径混乱 6 秒', true);
+      u.hrbpQuota = (u.hrbpQuota || 0) + 1;
+    } else {
+      killUnit(t, null, 'resign');             // 主动离职：走完整死亡管线但无击杀者
+      u.hrbpQuota = (u.hrbpQuota || 0) + 1;
+    }
+    if (u.hrbpQuota >= 2) {                    // 裁掉俩=完成本季度指标
+      u.hrbpLeaving = true;
+      addFeed('📋 HRBP 完成本季度裁员指标，深藏功与名，退场了', false);
+    } else u.hrbpTarget = hrbpPickTarget();
+  }
+}
+
 /* ---------- 精英野怪 ---------- */
 const ELITE_SKINS = {
   hallu: null,               // 用幽灵精灵
+  hrbp: '#2f3542',           // HRBP 藏青正装
   overfit: '#c0392b',
   injector: '#5b2f8e',
   align: '#7f8c9a',
@@ -5069,8 +5864,9 @@ function spawnElite(type, near, hpMult = 1) {
   u.spr = type === 'hallu' ? SPR.ghost : workerSprite(ELITE_SKINS[type]);
   if (type === 'overfit') u.r = 7;
   if (e.tier === 2) u.r = 6;
-  /* v2.0 · 16 精英词条：tier-2 精英 60% 概率挂 1 条词条；tier-1 30%；正式阶段 zone.phase>=2 提到 90/60 */
-  if (ELITE_AFFIXES && G.zone) {
+  /* v2.0 · 16 精英词条：tier-2 精英 60% 概率挂 1 条词条；tier-1 30%；正式阶段 zone.phase>=2 提到 90/60
+   * v2.6.2：HRBP 不进词条池——"[Bug]HRBP"观感像真 bug 标签，且留痕/OOO 等词条干扰约谈博弈 */
+  if (ELITE_AFFIXES && G.zone && type !== 'hrbp') {
     const chance = e.tier === 2 ? (G.zone.phase >= 2 ? .9 : .6) : (G.zone.phase >= 2 ? .6 : .3);
     if (Math.random() < chance) {
       const affix = pick(ELITE_AFFIXES);
@@ -5178,6 +5974,8 @@ function updateElite(u, dt) {
   /* v2.0：部门 Boss/试用期 Boss 用 e.ai 指向已实现的行为分支，绕开新增 AI 代码 */
   const beh = (e && e.ai) || u.eliteType;
   u.touchT -= dt;
+  /* v2.5 HRBP：完全独立的行为树（约谈/劝退/暴走），不走通用索敌 */
+  if (beh === 'hrbp') { updateHrbp(u, dt); return; }
   /* v2.3 小 Boss 博弈循环（tier2）：追击 → 签名技预警爆发 → 破绽窗口（易伤+减速，反打时机）
    * 原版小 Boss 只有平砍级的戳，毫无博弈感 */
   if (u.eliteTier === 2 && G.player.alive && T2_PATTERNS[beh]) {
@@ -5596,6 +6394,26 @@ function updatePickups(dt) {
         spawnSummon(u, p.boss);
         break;
       }
+      if (p.type === 'badge') {
+        /* v2.5 职位工牌：装进 E 槽（顶替现有大招）；重复拾取同款 = 职位晋升（升级） */
+        if (!u.isPlayer) continue;
+        p.dead = true;
+        const bdef = ACTIVES[p.badge];
+        const cur = u.activeE;
+        if (cur && cur.id === p.badge) {
+          if (cur.lv < 3) { cur.lv++; addFeed(`📛 职位晋升：「${bdef.name}」升到 Lv.${cur.lv}`, true); }
+          else { gainXp(u, 40); addFloat(p.x, p.y - 10, '已是顶级 HR 段位，折算经验', '#ffcf33', 7, .8); }
+        } else {
+          if (cur) addFeed(`E 槽大招「${ACTIVES[cur.id].name}」被工牌顶替`, false);
+          u.activeE = { id: p.badge, lv: 1 };
+          u.activeECd = 0;
+          addFeed(`📛 你捡起了「${bdef.badgeTitle}」的工牌——${bdef.claim}（E 键施放）`, true);
+          addFloat(u.x, u.y - 26, bdef.claim, '#ff9edb', 10, 1.8);
+        }
+        addFx({ type: 'levelupfx', x: u.x, y: u.y - 6, r: 16, life: .5 });
+        SFX.pickup();
+        break;
+      }
       if (p.type === 'tech') {
         if (u.isHR) continue;
         const t = TECH[p.id];
@@ -5755,6 +6573,12 @@ export function playerDash() {
   pl.dashVx = mx * 330; pl.dashVy = my * 330;
   pl.dashDur = .16;
   addFx({ type: 'dashfx', x: pl.x, y: pl.y - 4, ang: Math.atan2(my, mx), r: 14, life: .3 });
+  /* v2.5 办公椅漂移：椅子残影 + 轮子火花 */
+  if (pl.mods.chairDrift > 0) {
+    addFloat(pl.x - mx * 10, pl.y - 6, '🪑', '#c9d4e4', 11, .55);
+    addParts(pl.x - mx * 8, pl.y + 3, '#ffcf33', 5, 90, .35);
+    if (pl.mods.chairDrift >= 2) addFloat(pl.x - mx * 22, pl.y - 4, '🪑', '#8a94a8', 9, .4);
+  }
   pl.dashT = pl.mods.dashCd;
   /* 冲刺 = 进攻位移：落地 0.5 秒射速 +40%（与保命向的瞬移形成互补） */
   pl.buffs.fireT = Math.max(pl.buffs.fireT, .5);
@@ -5800,6 +6624,8 @@ const PERSONA_LABELS = {
   rlhf: '人肉 RLHF 训练员',
   revival: '万年活人矿·二次入职',
   opc: '一人公司 OPC',
+  hrbp: 'HRBP·编外人力伙伴',
+  reporter: 'PPT 路演大师',
 };
 const PERSONA_STARTER_SKILLS = [
   { persona: 'optimizer', skillId: 'office_politics' },
@@ -5807,6 +6633,8 @@ const PERSONA_STARTER_SKILLS = [
   { persona: 'rlhf', skillId: 'rlhf_piecework_labeling' },
   { persona: 'revival', skillId: 'revival_grind_body' },
   { persona: 'opc', skillId: 'opc_contract_worker' },
+  { persona: 'hrbp', skillId: 'hrbp_pua_aura' },        // v2.5 玩家也能走 HRBP 职业路线
+  { persona: 'reporter', skillId: 'ppt_cone_show' },    // v2.5 汇报专家（PPT 路演）路线
 ];
 function personaLabel(id) { return PERSONA_LABELS[id] || id; }
 /* ---------- 槽位容量修复：里程碑事件解锁副武器第4槽 ----------
@@ -5918,6 +6746,7 @@ function buildDraftPool(pl) {
   const hasE = pl.activeE;
   for (const id in ACTIVES) {
     const def = ACTIVES[id];
+    if (def.badgeOnly) continue;   // v2.5 职位工牌技：只能击杀对应精英拾取工牌获得/升级，不进抽卡池
     if (p && def.persona && def.persona !== p) continue;
     if (noPersonaThisDraft && def.persona) continue;
     const personaBonus = (def.persona && def.persona === p) ? 2 : 1;
@@ -6155,6 +6984,16 @@ export function startGame() {
   G = newGame(months);
   /* 免试用期开局直面 19 个持枪同事：给一段开局护盾缓冲（实测全托管 15 秒暴毙，落地成盒劝退） */
   if (months === 0) { G.player.shield = 30; G.player.shieldT = 20; }
+  /* v2.6.1 开局金色时刻：1% 风水宝地（全属性+5%）/ 5% 幸运周五（掉落+15%），可叠加 */
+  if (Math.random() < .01) {
+    const m = G.player.mods;
+    m.dmg *= 1.05; m.spd *= 1.05; m.fireRate = (m.fireRate || 1) * 1.05;
+    delay(() => { addFloat(G.player.x, G.player.y - 28, '🪑 今天工位风水极佳（全属性+5%）', '#ffcf33', 10, 2.4); }, 1);
+  }
+  if (Math.random() < .05) {
+    G.player.mods.dropChance = (G.player.mods.dropChance || 0) + .15;
+    delay(() => warn('📅 今天周五（并不是）：本局掉落 +15%'), 2);
+  }
   setState('playing');
   warn(months > 0
     ? `HR：签到成功。试用期 ${months} 个月，期间同事互不伤害，先把琐事清了。`

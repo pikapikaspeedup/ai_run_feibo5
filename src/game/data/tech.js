@@ -98,8 +98,8 @@ export const ELITES = {
   hr_screen: { name: 'HR 电话初筛官', tier: 2, hp: 230, spd: 72, ranged: true, level: 5, ai: 'ppt',
     intro: '☎️ 月度Boss「HR 电话初筛官」上线：你先做个自我介绍',
     dex: '扇形语音波 + 简历筛选线；绕侧面输出' },
-  demand_chair: { name: '需求评审会主席', tier: 2, hp: 250, spd: 82, ranged: true, level: 6, ai: 'meeting',
-    intro: '📋 月度Boss「需求评审会主席」上线：这个需求真的很简单',
+  demand_chair: { name: '需求评审终审主席', tier: 2, hp: 250, spd: 82, ranged: true, level: 6, ai: 'meeting',
+    intro: '📋 月度Boss「需求评审终审主席」上线：这个需求真的很简单',
     dex: '会议圈、返工单和需求改期，考验走位与清场' },
   tech_debt: { name: '技术债架构师', tier: 2, hp: 300, spd: 68, ranged: true, level: 7, ai: 'injector',
     intro: '🧱 月度Boss「技术债架构师」上线：老系统不能动，但需求要上',
@@ -113,6 +113,14 @@ export const ELITES = {
   warroom: { name: '上线战情室总指挥', tier: 2, hp: 380, spd: 76, ranged: true, level: 10, ai: 'ppt',
     intro: '🚨 月度Boss「上线战情室总指挥」上线：全员待命，今晚不睡',
     dex: '幻灯片、全员会议与战情室压迫，是最终 Boss 前的综合演练' },
+
+  /* HRBP：不进随机精英池（ELITE_T1/T2 是硬编码数组），由正式期"绩效盘点"计时器单独召唤。
+   * 行为见 core.js updateHrbp：锁定绩效垫底者（含玩家）→ PUA 约谈读条 5s →
+   * bot 被劝退"主动离职"（不算任何人击杀）/ 玩家吃"离职冲动"大 debuff；
+   * 反制：约谈期间打掉他 12% 血转入暴走可杀（掉 N+1 大礼包），或垫底者当场击杀敌人触发"绩效重新评估" */
+  hrbp: { name: 'HRBP · 人力业务伙伴', tier: 1, hp: 340, spd: 92, level: 8, ai: 'hrbp',
+    intro: '📋 HRBP 到场：本季度绩效盘点开始，垫底的同学请注意',
+    dex: '不主动打人，只约谈绩效垫底的——被读满 5 秒条的同事会"主动离职"；打疼他会暴走' },
 };
 /* v2.0 · 16 精英词条：随机词缀，改变名字前缀 + 施加一小段数值/机制修饰
  * apply(u) 在 spawnElite 里调用，可以直接改 u.hp/spd/mods、加计时器等 */

@@ -45,6 +45,32 @@ export const SKILLS = [
   { id: 'skip_report', name: '越级汇报', max: 2, eff: '子弹额外穿透 1 个敌人（链电武器：多跳 1 次）',
     tag: '直达大老板，子弹学会穿透中间层。', apply: m => m.pierce += 1,
     valid: u => !['charge', 'leg_beam', 'sniper', 'lob', 'leg_pie', 'boomerang', 'leg_boom'].includes(wdef(u).kind) },
+  /* ===== v2.5 梗系可视化被动：轻数值、重演出——每一个都"看得见" ===== */
+  { id: 'wooden_fish', name: '电子木鱼', max: 1, rarity: '绿',
+    eff: '击杀敲一声木鱼攒功德；30 功德自动兑换 1 次免死（功德护体）',
+    tag: '上班敲一敲，功德少不了。', apply: m => m.woodenFish = true },
+  { id: 'grad_party', name: '恭喜毕业', max: 2, rarity: '白',
+    eff: '击杀精英/处决时撒彩带开欢送会，自己获得 2 秒加速/层',
+    tag: '他的工位，现在是你的了。', apply: m => m.gradParty += 1 },
+  { id: 'chair_drift', name: '办公椅漂移', max: 2, rarity: '白',
+    eff: '冲刺拖出办公椅残影，冲刺冷却 -12%/层',
+    tag: '五轮驱动，工位漂移。', apply: m => { m.chairDrift += 1; if (m.dashCd) m.dashCd *= .88; } },
+  { id: 'off_clock', name: '下班闹钟', max: 1, rarity: '蓝',
+    eff: '每 45 秒闹钟准点响铃：8 秒内移速 +25%、射速 +15%（假装要下班）',
+    tag: '闹钟一响，牛马变鹿。', apply: m => m.offClock = true },
+  { id: 'read_no_reply', name: '已读不回', max: 2, rarity: '绿',
+    eff: '被举报/点名时 40%/层 概率直接掰掉标记（弹出"已读"）',
+    tag: '消息可以已读，班可以不加。', apply: m => m.readNoReply += .4 },
+  { id: 'spirit_stock', name: '精神股东', max: 1, rarity: '蓝',
+    eff: 'Boss 登场时你自动喊话嘲讽；Boss 对你的伤害 -15%（心理建设完毕）',
+    tag: '没有期权，但有意见。', apply: m => m.spiritStock = true },
+  { id: 'fengshui_ring', name: '工位风水阵', max: 1, rarity: '紫',
+    eff: '站定 1.2 秒展开风水罗盘：圈内每秒回 2 HP、闪避 +10%（移动即散）',
+    tag: '显示器朝南，键盘归位，大吉。', apply: m => m.fengshuiRing = true },
+  { id: 'ctrl_cv', name: 'Ctrl+C / Ctrl+V', max: 1, rarity: '紫',
+    eff: '击杀 8% 概率原地粘贴一个半透明分身帮打 6 秒',
+    tag: '优秀同事，值得复制。', apply: m => m.ctrlCV = true },
+
   { id: 'toxic_aura', name: '职场毒瘤', max: 3, eff: '身边 100px 敌人每秒 -2 HP',
     tag: '光是站在旁边都会掉血。', apply: m => m.auraDmg += 2 },
 
@@ -232,4 +258,49 @@ export const SKILLS = [
       if (existing) existing.pct += .3;
       else m.procs.onHurt.push({ chance: 1, effect: 'thornsHurt', pct: .3 });
     } },
+
+  /* ===================================================================
+   * 人设六：HRBP·编外人力伙伴（PUA 控制/裁员流）——把敌方 HRBP 的活儿抢过来自己干
+   * =================================================================== */
+  { id: 'hrbp_pua_aura', name: 'PUA 气场', max: 4, rarity: '白', persona: 'hrbp',
+    eff: '周围 110px 敌人造成的伤害 -6%/层',
+    tag: '你已经很努力了，但别人比你更努力。', apply: m => m.puaAura += .06 },
+  { id: 'hrbp_kpi_cut', name: '优化提成', max: 4, rarity: '白', persona: 'hrbp',
+    eff: '每次击杀回复 2 生命/层',
+    tag: '每优化一个人，绩效都会好看一点。', apply: m => m.hrbpKillHeal += 2 },
+  { id: 'hrbp_layoff_letter', name: '裁员函速递', max: 3, rarity: '绿', persona: 'hrbp',
+    eff: '每 6/5/4 秒自动向最近敌人寄出裁员函（伤害并致幻 2.5s）',
+    tag: '挂号信，拒收也视为送达。', apply: m => m.layoffLetter += 1 },
+  { id: 'hrbp_blame_transfer', name: '责任转移', max: 3, rarity: '蓝', persona: 'hrbp',
+    eff: '受击 15%/层 概率让攻击者陷入幻觉 2.5s（口径混乱）',
+    tag: '从流程上讲，这个锅是你的。',
+    apply: m => m.procs.onHurt.push({ chance: .15, effect: 'hrbpBlame' }) },
+  { id: 'hrbp_forced_resign', name: '劝退话术', max: 1, rarity: '紫', persona: 'hrbp',
+    eff: '质变：处决触发时 35% 概率改为策反目标 8 秒（劝它调转枪口）',
+    tag: '不是裁你，是帮你找到更适合的赛道。', apply: m => m.forcedResign = true },
+  { id: 'hrbp_layoff_wave', name: '季度大裁员', max: 1, rarity: '橙', persona: 'hrbp',
+    eff: '大招：每 40 秒对屏幕内至多 3 个最低血量敌人集体约谈（1.2 秒后重伤+减速）',
+    tag: '名单早就定了，会议只是流程。', apply: m => m.layoffWave = true },
+
+  /* ===================================================================
+   * 人设七：PPT 路演大师（汇报光锥/爆发流）——把敌方 PPT 大魔王的路演抢过来自己讲
+   * =================================================================== */
+  { id: 'ppt_laser_pointer', name: '激光笔', max: 4, rarity: '白', persona: 'reporter',
+    eff: '暴击率 +5%/层',
+    tag: '红点指到哪，问题就在哪。', apply: m => m.crit += .05 },
+  { id: 'ppt_align_grain', name: '对齐颗粒度', max: 4, rarity: '白', persona: 'reporter',
+    eff: '站定 0.8 秒后攻速 +8%/层（移动打断）',
+    tag: '站住不动，才能把颗粒度对齐。', apply: m => m.alignGrain += .08 },
+  { id: 'ppt_cone_show', name: '路演光锥', max: 3, rarity: '绿', persona: 'reporter',
+    eff: '每 7/6/5 秒朝瞄准方向放一页幻灯片扇形（伤害并眩晕 0.4s）',
+    tag: '这一页很重要，大家看 deck。', apply: m => m.coneShow += 1 },
+  { id: 'ppt_big_pie', name: '画大饼', max: 3, rarity: '蓝', persona: 'reporter',
+    eff: '受击 15%/层 概率给攻击者画一张大饼（致幻+灼伤）',
+    tag: '明年上市，人人期权。', apply: m => m.procs.onHurt.push({ chance: .15, effect: 'bigPie' }) },
+  { id: 'ppt_uplevel', name: '向上汇报', max: 3, rarity: '蓝', persona: 'reporter',
+    eff: '击杀精英/小Boss后伤害 +12%，持续 5s/层',
+    tag: '功劳要第一时间同步给老板。', apply: m => m.uplevelBuff += 1 },
+  { id: 'ppt_annual_report', name: '年终述职', max: 1, rarity: '橙', persona: 'reporter',
+    eff: '大招：每 55 秒全屏路演冲击（屏内敌人受伤+眩晕，自身伤害短暂 +30%）',
+    tag: '一年就讲这一次，必须惊艳全场。', apply: m => m.annualReport = true },
 ];

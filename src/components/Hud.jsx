@@ -6,7 +6,7 @@ import { TECH, CURSES, DISTILLS } from '../game/data/tech.js';
 import { SUBS } from '../game/data/subweapons.js';
 import { ACTIVES } from '../game/data/actives.js';
 import { chipSprite } from '../game/sprites.js';
-import { touch } from '../game/input.js';
+import { touch, IS_TOUCH } from '../game/input.js';
 import { getG, maxHp, aliveWorkers, chipObtainable, getFireMode, FIRE_MODES } from '../game/core.js';
 import { drawMinimap } from '../game/render.js';
 import * as bridge from '../game/bridge.js';
@@ -119,6 +119,13 @@ export default function Hud() {
     : z.phase < phases.length
       ? <>下轮优化 <b>{fmtTime(Math.max(0, phases[z.phase].at - (G.t - G.trialOffset)))}</b></>
       : '最终红线';
+  /* 移动端顶部横批压成一行小字：战场中央留白 */
+  const mobileTopLine = G.trial.active
+    ? <span style={{ color: '#7ee08a' }}>{G.trial.wave}/{G.trial.months}月 · {trialLabel}</span>
+    : z.shrinking ? <b style={{ color: '#ff8a8a' }}>红线收缩中</b>
+    : z.phase < phases.length
+      ? <>优化 {fmtTime(Math.max(0, phases[z.phase].at - (G.t - G.trialOffset)))}</>
+      : '最终红线';
 
   return (
     <div id="hud">
@@ -131,7 +138,7 @@ export default function Hud() {
           <i style={{ width: clamp(pl.xp / TUNE.levelNeed(pl.level) * 100, 0, 100) + '%' }} />
         </div>
         <div className="tag">LV.<b>{pl.level}</b></div>
-        {techStr && <div className="tag" id="tech-tag">{techStr}</div>}
+        {techStr && !IS_TOUCH && <div className="tag" id="tech-tag">{techStr}</div>}
         <div id="curse-row">
           {pl.reportedT > 0 && (
             <span className="curse-tag" style={{ background: '#40101a', borderColor: '#ff4f4f', color: '#ffc9c9' }}>
@@ -145,8 +152,16 @@ export default function Hud() {
       </div>
 
       <div className="hud-tc">
-        <div className="tag">存活牛马 <b>{aliveWorkers() + (G.latentBots ? G.latentBots.length : 0)}</b>/{TUNE.botCount + 1}{G.latentBots ? '（同事未到岗）' : ''}</div>
-        <div className="tag" id="next-tag" style={{ marginTop: 4 }}>{nextZone}</div>
+        {IS_TOUCH ? (
+          <div className="tag" id="top-line-m">
+            👥{aliveWorkers() + (G.latentBots ? G.latentBots.length : 0)} · {mobileTopLine}
+          </div>
+        ) : (
+          <>
+            <div className="tag">存活牛马 <b>{aliveWorkers() + (G.latentBots ? G.latentBots.length : 0)}</b>/{TUNE.botCount + 1}{G.latentBots ? '（同事未到岗）' : ''}</div>
+            <div className="tag" id="next-tag" style={{ marginTop: 4 }}>{nextZone}</div>
+          </>
+        )}
         <ZoneWarn />
       </div>
 
@@ -168,7 +183,7 @@ export default function Hud() {
         <Minimap />
         <div className="tag">{fmtTime(G.t)}</div>
         <div className="tag">优化他人 <b>{G.kills}</b></div>
-        {!touch.using && (
+        {!IS_TOUCH && !touch.using && (
           <div className="tag" style={{ opacity: .85 }}>开火 <b>{FIRE_MODES[getFireMode()]}</b> · T</div>
         )}
       </div>
@@ -186,7 +201,8 @@ export default function Hud() {
       )}
 
       <div className="hud-bc">
-        {(pl.activeQ || pl.active) && (() => {
+        {/* 移动端：Q/E 信息由右下技能盘承担，这里不再重复；武器卡去长说明，贴左下角 */}
+        {!IS_TOUCH && (pl.activeQ || pl.active) && (() => {
           const a = pl.activeQ || pl.active;
           const cd = pl.activeQCd > 0 ? pl.activeQCd : pl.activeCd;
           return (
@@ -197,7 +213,7 @@ export default function Hud() {
             </div>
           );
         })()}
-        {pl.activeE && (
+        {!IS_TOUCH && pl.activeE && (
           <div id="active-chip-e" className={pl.activeECd > 0 ? 'cd' : ''}>
             <b>E</b>
             <span>{ACTIVES[pl.activeE.id].name} Lv{pl.activeE.lv}</span>
@@ -216,8 +232,9 @@ export default function Hud() {
               {[0, 1, 2, 3, 4].map(i => (
                 <i key={i} className={w.leg ? 'leg' : i < w.lvl ? 'on' : ''} />
               ))}
+              {IS_TOUCH && pl.weapon2 && <span id="wpn2-mini">🗡{WEAPONS[pl.weapon2.id].name.slice(0, 2)}{pl.weapon2.lvl}</span>}
             </div>
-            <div id="wpn-hint">{hint}</div>
+            {!IS_TOUCH && <div id="wpn-hint">{hint}</div>}
           </div>
         </div>
       </div>

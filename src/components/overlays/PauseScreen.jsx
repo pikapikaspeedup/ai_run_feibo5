@@ -18,7 +18,7 @@ for (const [path, url] of Object.entries(import.meta.glob('../../assets/generate
 }
 
 const RARITY_COLOR = { 白: '#f2efe6', 绿: '#7ee08a', 蓝: '#7ac8ff', 紫: '#b665ff', 橙: '#ff9440' };
-const PERSONA_NAMES = { optimizer: '首席降本增效官', slacker: '摸鱼表演艺术家', rlhf: '人肉 RLHF 训练员', revival: '万年活人矿·二次入职', opc: '一人公司 OPC' };
+const PERSONA_NAMES = { optimizer: '首席降本增效官', slacker: '摸鱼表演艺术家', rlhf: '人肉 RLHF 训练员', revival: '万年活人矿·二次入职', opc: '一人公司 OPC', hrbp: 'HRBP·编外人力伙伴', reporter: 'PPT 路演大师' };
 
 function skillById(id) { return SKILLS.find(s => s.id === id); }
 

@@ -333,7 +333,8 @@ canvas#cv {
   border-color: var(--badge); color: var(--badge);
 }
 #touch-ui #btn-interact-m.fuse { background: var(--badge); color: var(--ink); animation: blink .8s steps(2) infinite; }
-#touch-ui #btn-pause-m { top: max(8px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); width: 42px; height: 42px; font-size: 16px; }
+/* 暂停键：小地图左侧，避免叠在小地图上 */
+#touch-ui #btn-pause-m { top: max(8px, env(safe-area-inset-top)); right: calc(max(10px, env(safe-area-inset-right)) + 92px); width: 42px; height: 42px; font-size: 16px; }
 /* 就绪呼吸提示：大招可放时微微发光 */
 #touch-ui #btn-active-e-m:not(.cd) { animation: readypulse 1.6s ease-in-out infinite; }
 @keyframes readypulse {
@@ -348,25 +349,45 @@ canvas#cv {
   align-items: center; justify-content: center; text-align: center;
   font-family: var(--sans); font-size: 17px; line-height: 2; color: var(--paper); }
 #rotate-hint .r-ico { font-size: 40px; }
-@media (orientation: portrait) and (pointer: coarse) {
-  #rotate-hint:not(.off) { display: flex; }
+@media (orientation: portrait) {
+  body.is-touch #rotate-hint:not(.off) { display: flex; }
 }
 
-@media (pointer: coarse) {
-  #prompt-e { display: none !important; }
-  #mute-note { display: none; }
-  /* 移动端 HUD 全面放大（配合逻辑视口 480×270 的世界放大）：
-   * 角落锚定 scale，不动布局流 */
-  .hud-tl { transform: scale(1.22); transform-origin: top left; }
-  .hud-tr { transform: scale(1.22); transform-origin: top right; }
-  .hud-tc { transform: translateX(-50%) scale(1.22); transform-origin: top center; }
-  .hud-bc { transform: translateX(-50%) scale(1.05); transform-origin: bottom center; }
-  #boss-bar-wrap { transform: translateX(-50%) scale(1.22); transform-origin: top center; }
-  #killfeed { transform: scale(1.15); transform-origin: top right; top: 104px; }
-  #wpn-card { min-width: 0; }
-  #killfeed div:nth-child(n+4) { display: none; }
-  .hud-tl .bar, .bar.xp { width: 150px; }
+/* ===== 触屏 HUD（body.is-touch，与 JS IS_COARSE 同源）：
+ * 紧凑贴边，战场中央留白（世界本身已放大 4/3，HUD 不放大）。
+ * 顶部横批压成单行小字，底部武器卡去说明贴左下，Q/E 芯片由技能盘承担 ===== */
+body.is-touch #prompt-e { display: none !important; }
+body.is-touch #mute-note { display: none; }
+body.is-touch .hud-tl { top: 6px; left: 8px; gap: 4px; }
+body.is-touch .hud-tl .bar, body.is-touch .bar.xp { width: 132px; }
+body.is-touch .hud-tl .bar.hp { height: 12px; }
+body.is-touch .hud-tl .bar.xp { height: 5px; }
+body.is-touch .hud-tc { top: 4px; }
+body.is-touch #top-line-m { font-size: 10px; padding: 2px 8px; opacity: .92; white-space: nowrap; }
+body.is-touch #zone-warn { font-size: 10px; padding: 2px 8px; margin-top: 3px; }
+body.is-touch .hud-tr { top: 6px; right: 8px; gap: 4px; }
+body.is-touch .hud-tr .tag { font-size: 9px; padding: 2px 6px; }
+body.is-touch #minimap { width: 84px; height: 84px; }
+body.is-touch #boss-bar-wrap { top: 52px; }
+body.is-touch #boss-bar-wrap .bar { width: 180px; height: 10px; }
+body.is-touch #boss-bar-wrap > span { font-size: 9px; letter-spacing: 1px; }
+body.is-touch #killfeed { top: 76px; right: 8px; gap: 2px; }
+body.is-touch #killfeed div { font-size: 9px; padding: 1px 5px; }
+body.is-touch #killfeed div:nth-child(n+3) { display: none; }
+/* 武器卡：贴左下角、只留 图标+名字+等级点，杜绝底部中央长条 */
+body.is-touch .hud-bc { left: 8px; bottom: 8px; transform: none; }
+body.is-touch #wpn-card {
+  min-width: 0; padding: 4px 8px; gap: 6px;
+  border-top-width: 2px; opacity: .92;
 }
+body.is-touch #wpn-card canvas { width: 22px; height: 22px; }
+body.is-touch #wpn-name { font-size: 11px; }
+body.is-touch #wpn-name small { font-size: 8px; margin-left: 4px; }
+body.is-touch #wpn-pips { margin-top: 2px; }
+body.is-touch #wpn-pips i { width: 10px; height: 4px; }
+#wpn2-mini { font-size: 8px; color: #9ad1ff; margin-left: 5px; font-family: var(--sans); }
+body.is-touch .tag { font-variant-numeric: tabular-nums; }
+body.is-touch #curse-row .curse-tag { font-size: 9px; padding: 1px 5px; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
