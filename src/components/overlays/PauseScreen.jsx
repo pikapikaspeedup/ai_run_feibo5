@@ -10,6 +10,7 @@ import { TECH, DISTILLS, CURSES } from '../../game/data/tech.js';
 import { EVOLUTIONS } from '../../game/data/evolutions.js';
 import { milestoneLabel } from '../../game/data/milestones.js';
 import * as bridge from '../../game/bridge.js';
+import { SUB_ICONS, ACTIVE_ICONS } from '../icons.js';
 
 /* v2.4 人设头像 */
 const PORTRAITS = {};
@@ -113,7 +114,11 @@ export default function PauseScreen() {
               {subList.length === 0 && <div className="pause-empty">未装备</div>}
               {subList.map(s => (
                 <div className="pause-item" key={s.id}>
-                  <span className="pause-name">🔧 {s.def.name}</span>
+                  <span className="pause-name">
+                    {SUB_ICONS[s.id]
+                      ? <img src={SUB_ICONS[s.id]} alt="" style={{ width: 16, height: 16, imageRendering: 'pixelated', verticalAlign: 'text-bottom', marginRight: 4 }} />
+                      : '🔧 '}
+                    {s.def.name}</span>
                   <span className="pause-lv">Lv.{s.lv}</span>
                 </div>
               ))}
@@ -124,7 +129,11 @@ export default function PauseScreen() {
               {!activeQData && <div className="pause-empty">未装备（升级时抽紫卡）</div>}
               {activeQData && (
                 <div className="pause-item">
-                  <span className="pause-name">⚡ {activeQData.def.name}</span>
+                  <span className="pause-name">
+                    {ACTIVE_ICONS[activeQData.id]
+                      ? <img src={ACTIVE_ICONS[activeQData.id]} alt="" style={{ width: 16, height: 16, imageRendering: 'pixelated', verticalAlign: 'text-bottom', marginRight: 4 }} />
+                      : '⚡ '}
+                    {activeQData.def.name}</span>
                   <span className="pause-lv">Lv.{activeQData.lv}</span>
                   <span className="pause-cd" style={{ color: activeQData.cd > 0 ? '#ff6a6a' : '#7ee08a' }}>
                     {activeQData.cd > 0 ? `冷却 ${activeQData.cd.toFixed(1)}s` : '就绪'}
@@ -138,7 +147,11 @@ export default function PauseScreen() {
               {!activeEData && <div className="pause-empty">未装备（升级时抽紫卡）</div>}
               {activeEData && (
                 <div className="pause-item">
-                  <span className="pause-name" style={{ color: '#ffcf33' }}>🌟 {activeEData.def.name}</span>
+                  <span className="pause-name" style={{ color: '#ffcf33' }}>
+                    {ACTIVE_ICONS[activeEData.id]
+                      ? <img src={ACTIVE_ICONS[activeEData.id]} alt="" style={{ width: 16, height: 16, imageRendering: 'pixelated', verticalAlign: 'text-bottom', marginRight: 4 }} />
+                      : '🌟 '}
+                    {activeEData.def.name}</span>
                   <span className="pause-lv">Lv.{activeEData.lv}</span>
                   <span className="pause-cd" style={{ color: activeEData.cd > 0 ? '#ff6a6a' : '#7ee08a' }}>
                     {activeEData.cd > 0 ? `冷却 ${activeEData.cd.toFixed(1)}s` : '就绪'}

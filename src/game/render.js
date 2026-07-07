@@ -6,6 +6,7 @@ import { rand, dist, dist2, clamp } from './utils.js';
 import { WEAPONS } from './data/weapons.js';
 import { wdef } from './data/weapons.js';
 import { CONSUMABLES } from './data/consumables.js';
+import { MOBS } from './data/mobs.js';
 import { TECH, TECH_TIERS } from './data/tech.js';
 import { SPR, chipSprite, techSprite, FLOOR_TILES } from './sprites.js';
 import { mouse, touch } from './input.js';
@@ -171,7 +172,9 @@ import { PROP_VISUAL as PROP_SIZE } from './data/obstacles.js';
 /* v2.2 特效帧动画：fx_<name>_f0..fN.png（pixel-animation-grid 产物）——爆炸/命中火花/挥砍轨迹。
  * 一次性播放（按 fx 生命进度取帧），素材缺失时各绘制点回退原有程序化图形 */
 const FX_ANIM = {};
-const _fxGlob = import.meta.glob('../assets/generated/fx_*.png', { eager: true, import: 'default' });
+/* v2.7：电梯门等非 fx_ 前缀的帧动画并入同一容器 */
+const _fxGlob = { ...import.meta.glob('../assets/generated/fx_*.png', { eager: true, import: 'default' }),
+  ...import.meta.glob('../assets/generated/elevator_doors_*.png', { eager: true, import: 'default' }) };
 for (const [path, src] of Object.entries(_fxGlob)) {
   const key = path.split('/').pop().replace('.png', '');
   const fm = key.match(/^(.+)_f(\d+)$/);
@@ -185,6 +188,12 @@ function fxFrame(name, progress) {
   if (!a || !a.length || !a.every(f => f)) return null;
   return a[Math.min(a.length - 1, Math.max(0, Math.floor(progress * a.length)))];
 }
+/* v2.7 循环取帧（fx_ 前缀的 loop 素材：燃烧饼/警报灯等持续演出） */
+function fxLoop(name, t) {
+  const a = FX_ANIM[name];
+  if (!a || !a.length || !a.every(f => f)) return null;
+  return a[Math.abs(Math.floor(t)) % a.length];
+}
 /* 一次性特效查表：type → [帧集名, 尺寸倍率, 垂直锚(0.5=居中, 越大越靠上)] */
 const ONESHOT_FX = {
   nukefx: ['fx_nuke', 2.8, .8], critfx: ['fx_crit', 2.4, .5], hurtfx: ['fx_hurt', 2.4, .5],
@@ -192,6 +201,18 @@ const ONESHOT_FX = {
   revivefx: ['fx_revive', 2.6, .75], summonfx: ['fx_summon', 2.4, .7],
   fusionfx: ['fx_fusion', 2.8, .6], bossslamfx: ['fx_bossslam', 2.6, .6],
   bosspiefx: ['fx_bosspie', 2.6, .85], bossroarfx: ['fx_bossroar', 2.6, .6],
+  /* v2.7 素材第五轮：演出欠账补齐 */
+  potfx: ['fx_pot', 3.0, .7],           // 一锅端天降大锅
+  confettifx: ['fx_confetti', 2.8, .7], // 恭喜毕业/年度优秀员工彩带
+  woodenfishfx: ['fx_woodenfish', 2.2, .6], // 电子木鱼功德
+  goldstarfx: ['fx_goldstar', 2.4, .5], // 出金/会心金星
+  flashfx: ['fx_flash', 3.2, .55],      // 团建合影闪光灯
+  paperrainfx: ['fx_paperrain', 2.8, .6], // 打印机卡纸 A4 雨
+  waterspillfx: ['fx_waterspill', 2.6, .55], // 饮水机爆裂水花
+  alarmfx: ['fx_alarm', 2.2, .6],       // 消防演习警报灯（life 拉长慢放）
+  offerfx: ['fx_offer', 2.6, .7],       // 编制降临金光柱
+  avalanchefx: ['fx_avalanche', 2.4, .6], // 文档塔雪崩
+  paperburstfx: ['fx_paperburst', 2.6, .6], // 纸屑清屏雨(复印机)
 };
 /* 地面贴花（decal_f0..8：咖啡渍/文件/线缆等，切自 decal_sheet） */
 const DECAL_IMGS = [];
@@ -314,6 +335,79 @@ export function render(ctx) {
   ctx.strokeStyle = '#0b0d12'; ctx.lineWidth = 6;
   ctx.strokeRect(3, 3, TUNE.world - 6, TUNE.world - 6);
 
+  /* v2.7 顶灯光晕：画在地板之上、贴花之下——办公室终于有"光"了（素材未到货前静默跳过） */
+  if (G.lightSpots) {
+    for (const L of G.lightSpots) {
+      if (L.x < ox - 90 || L.x > ox + VIEW_W + 90 || L.y < oy - 90 || L.y > oy + VIEW_H + 90) continue;
+      const lf = fxLoop('fx_lightpool', G.t * 3 + L.x * .01);
+      if (!lf) break;
+      ctx.globalAlpha = .22;
+      ctx.drawImage(lf, L.x - 60, L.y - 42, 120, 84);
+      ctx.globalAlpha = 1;
+    }
+  }
+  /* v2.8 抽烟怪烟雾区：灰雾圆（有贴图用贴图 loop，否则程序渐变雾） */
+  for (const u of G.units) {
+    if (!u.alive || !u.mobType || !MOBS[u.mobType] || !MOBS[u.mobType].smokeZone) continue;
+    const r = MOBS[u.mobType].smokeZone;
+    const sf = fxLoop('fx_smokezone', G.t * 3 + u.x * .02);
+    if (sf) {
+      ctx.globalAlpha = .5;
+      ctx.drawImage(sf, u.x - r, u.y - r * .8, r * 2, r * 1.6);
+      ctx.globalAlpha = 1;
+    } else {
+      const g2 = ctx.createRadialGradient(u.x, u.y - 6, 6, u.x, u.y - 6, r);
+      g2.addColorStop(0, 'rgba(160,160,170,.4)');
+      g2.addColorStop(1, 'rgba(160,160,170,0)');
+      ctx.fillStyle = g2;
+      ctx.beginPath(); ctx.arc(u.x, u.y - 6, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  /* v2.8 会议室结界圈：蓝色双环 + 旋转虚线（出圈掉血警示） */
+  if (G.arena) {
+    const A = G.arena;
+    ctx.save();
+    ctx.strokeStyle = '#6aa3ff'; ctx.lineWidth = 3;
+    ctx.globalAlpha = .7 + .2 * Math.sin(G.t * 6);
+    ctx.setLineDash([12, 8]); ctx.lineDashOffset = -G.t * 30;
+    ctx.beginPath(); ctx.arc(A.x, A.y, A.r, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = .12;
+    ctx.fillStyle = '#6aa3ff';
+    ctx.beginPath(); ctx.arc(A.x, A.y, A.r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  /* v2.8 打卡机光柱：金色呼吸柱 + 底座 */
+  if (G.punchClocks) {
+    for (const pc of G.punchClocks) {
+      const a = .5 + .35 * Math.sin(G.t * 8 + pc.x);
+      ctx.save();
+      ctx.globalAlpha = a * .5;
+      ctx.fillStyle = '#ffcf33';
+      ctx.fillRect(pc.x - 7, pc.y - 62, 14, 62);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#ffe27a';
+      ctx.fillRect(pc.x - 3, pc.y - 62, 6, 62);
+      ctx.fillStyle = '#14161d';
+      ctx.fillRect(pc.x - 9, pc.y - 6, 18, 8);
+      ctx.fillStyle = '#ffcf33';
+      ctx.font = '7px monospace'; ctx.textAlign = 'center';
+      ctx.fillText('打卡', pc.x, pc.y - 66);
+      ctx.textAlign = 'left';
+      ctx.restore();
+    }
+  }
+  /* v2.7 空调风口飘带（挂在 chunk 顶边，环境在动的信号） */
+  if (G.acVents) {
+    for (const V of G.acVents) {
+      if (V.x < ox - 40 || V.x > ox + VIEW_W + 40 || V.y < oy - 40 || V.y > oy + VIEW_H + 40) continue;
+      const vf = fxLoop('fx_acflow', G.t * 5 + V.x * .03);
+      if (!vf) break;
+      ctx.globalAlpha = .8;
+      ctx.drawImage(vf, V.x - 11, V.y - 8, 22, 18);
+      ctx.globalAlpha = 1;
+    }
+  }
   /* v2.3 地面贴花：咖啡渍/散落文件/线缆等（画在地板上、单位之下，屏外由 canvas 自动裁剪） */
   if (G.decals && DECAL_IMGS.length) {
     for (const d of G.decals) {
@@ -355,8 +449,16 @@ export function render(ctx) {
     }
   }
 
-  /* 燃烧区 */
+  /* 燃烧区（v2.7：带 spr 的用帧动画贴图循环——文心燃烧大饼等） */
   for (const b of G.burns) {
+    const bf = b.spr && fxLoop(b.spr, G.t * 8 + b.x * .05);
+    if (bf) {
+      ctx.globalAlpha = .85;
+      const s = b.r * 2.4 / bf.width;
+      ctx.drawImage(bf, b.x - bf.width * s / 2, b.y - bf.height * s / 2, bf.width * s, bf.height * s);
+      ctx.globalAlpha = 1;
+      continue;
+    }
     ctx.globalAlpha = .18 + .06 * Math.sin(b.t * 8);
     ctx.fillStyle = b.color;
     ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
@@ -419,6 +521,13 @@ export function render(ctx) {
         ctx.fillStyle = '#000'; ctx.fillText(nm, p.x - nm.length * 3.5 + 1, p.y + 13 + by);
         ctx.fillStyle = '#d9b3ff'; ctx.fillText(nm, p.x - nm.length * 3.5, p.y + 12 + by);
       }
+    } else if (p.type === 'box') {
+      /* v2.8 裁员纸箱：等待有缘怪捡走传承 */
+      ctx.fillStyle = '#8a6a4a'; ctx.fillRect(p.x - 6, p.y - 6 + by, 12, 10);
+      ctx.fillStyle = '#6a4a2a'; ctx.fillRect(p.x - 6, p.y - 6 + by, 12, 3);
+      ctx.fillStyle = '#f2efe6'; ctx.font = '5px monospace'; ctx.textAlign = 'center';
+      ctx.fillText('没事', p.x, p.y + 2 + by);
+      ctx.textAlign = 'left';
     } else if (p.type === 'badge') {
       /* v2.5 职位工牌：金框挂绳工牌，粉杠 = HRBP、黄杠 = 大魔王翻页笔 */
       const px = Math.round(p.x), py = Math.round(p.y + by);
@@ -488,10 +597,22 @@ export function render(ctx) {
       return;
     }
     if (o.spr === 'elevator') {
-      /* v2.0 §3.3 电梯：金属门，开门时中间发光 */
+      /* v2.7 电梯门帧动画（elevator_doors_f0 关 → f8 全开）：开门 0.5s 内播开、关门前 0.5s 倒放 */
+      const T = o._openT || 0;
+      const df = (() => {
+        if (!FX_ANIM.elevator_doors || !FX_ANIM.elevator_doors[8]) return null;
+        const idx = T <= 0 ? 0 : T > 2.5 ? Math.round((3 - T) / .5 * 8) : T < .5 ? Math.round(T / .5 * 8) : 8;
+        return FX_ANIM.elevator_doors[Math.max(0, Math.min(8, idx))];
+      })();
+      if (df) {
+        ctx.drawImage(df, o.x - 2, o.y - 2, o.w + 4, o.h + 4);
+        ctx.globalAlpha = 1;
+        return;
+      }
+      /* 素材未到货回退：v2.0 §3.3 金属门程序绘制 */
       ctx.fillStyle = '#3a3a3a';
       ctx.fillRect(o.x - 2, o.y - 2, o.w + 4, o.h + 4);
-      const opening = o._openT > 0;
+      const opening = T > 0;
       ctx.fillStyle = opening ? '#38d3e8' : '#6a6a6a';
       ctx.fillRect(o.x, o.y, o.w, o.h);
       ctx.fillStyle = '#1a1a1a';
@@ -571,6 +692,19 @@ export function render(ctx) {
       if (sf) {
         ctx.globalAlpha = .8;
         ctx.drawImage(sf, x + (s ? s.ox + s.dw / 2 : 16) - 9, y + (s ? s.oy : 0) - 16, 18, 18);
+        ctx.globalAlpha = 1;
+      }
+    }
+    /* v2.7 设施 idle：打印机吐纸抖动 / 饮水机气泡——办公室开始"呼吸" */
+    if (o.spr === 'printer' && !o.destroyed) {
+      const pf = fxLoop('fx_printeridle', G.t * 4 + o.x * .05);
+      if (pf) { ctx.drawImage(pf, x + (s ? s.ox : 0), y + (s ? s.oy - 2 : -2), s ? s.dw : 26, s ? s.dh : 22); }
+    }
+    if ((o.spr === 'cooler' || o.spr === 'drinks') && !o.destroyed) {
+      const cf = fxLoop('fx_coolerbubble', G.t * 3 + o.x * .04);
+      if (cf) {
+        ctx.globalAlpha = .9;
+        ctx.drawImage(cf, x + (s ? s.ox : 0), y + (s ? s.oy - 4 : -4), s ? s.dw : 20, s ? s.dh : 26);
         ctx.globalAlpha = 1;
       }
     }
@@ -820,12 +954,13 @@ function drawUnit(ctx, G, u) {
     const hf = eliteFrame('elite_hr', G.t * 5 + u.x * .05);
     if (hf) { spr = hf; scale = 22 / hf.height; }
   }
-  /* v2.2 精英专属立绘：elite_<type>_f0..8 待机动画（tier2 大一号，竞争壁垒专家再大一号） */
+  /* v2.2 精英专属立绘：elite_<type>_f0..8 待机动画（tier2 大一号，竞争壁垒专家再大一号）
+   * v2.8：红温模式体型再 +10%（配合下方红色剪影叠加） */
   if (u.isElite && !u.isBoss && u.eliteType) {
     const ef = eliteFrame('elite_' + u.eliteType, G.t * 5 + (u.x * .03));
     if (ef) {
       spr = ef;
-      const targetH = u.eliteType === 'overfit' ? 34 : u.eliteTier === 2 ? 30 : 24;
+      const targetH = (u.eliteType === 'overfit' ? 34 : u.eliteTier === 2 ? 30 : 24) * (u.rageMode ? 1.1 : 1);
       scale = targetH / ef.height;
     }
   }
@@ -840,7 +975,9 @@ function drawUnit(ctx, G, u) {
       const alt = HIFI_MOBS[u.sprKey + '_b'];
       hifiMob = alt && Math.floor(G.t * 6) % 2 ? alt : HIFI_MOBS[u.sprKey];
     }
-    if (hifiMob) { spr = hifiMob; scale = Math.min(1, 18 / hifiMob.height); }
+    if (hifiMob) { spr = hifiMob; scale = Math.min(1, 18 / hifiMob.height) * (u.sizeMul || 1); }
+    /* v2.8 文档塔是大块头（sizeMul 随掉层缩小）、屎山巨兽也大一号 */
+    if (hifiMob && (u.mobType === 'doc_tower' || u.mobType === 'shit_mountain')) scale = Math.min(1, 30 / hifiMob.height) * (u.sizeMul || 1);
   }
   const w = spr.width, h = spr.height;
 
@@ -850,8 +987,10 @@ function drawUnit(ctx, G, u) {
   ctx.save();
   if (u.invulnT > 0) ctx.globalAlpha = .5 + .3 * Math.sin(G.t * 20);
   if (u.eliteType === 'hallu') ctx.globalAlpha = .55 + .35 * Math.sin(G.t * 17);
+  if (u.sneakT > 0) ctx.globalAlpha = .38;   // v2.8 小报告匿名疾跑
   ctx.translate(x, y + bob);
   ctx.scale(face, 1);
+  if (u.isPlayer && (u.lieFlat || u.baiLanT > 0)) ctx.rotate(Math.PI / 2);   // v2.8 躺平/摆烂：整个人放倒
   ctx.drawImage(spr, Math.round(-w / 2 * scale), Math.round(-(h - 3) * scale), Math.round(w * scale), Math.round(h * scale));
   ctx.restore();
 
@@ -861,6 +1000,17 @@ function drawUnit(ctx, G, u) {
     ctx.save();
     ctx.globalAlpha = .55;
     ctx.filter = 'brightness(0) invert(1)';
+    ctx.translate(x, y + bob);
+    ctx.scale(face, 1);
+    ctx.drawImage(spr, Math.round(-w / 2 * scale), Math.round(-(h - 3) * scale), Math.round(w * scale), Math.round(h * scale));
+    ctx.filter = 'none';
+    ctx.restore();
+  }
+  /* v2.8 红温模式：持续红色剪影脉动叠加（技术同受击闪白，sepia+hue 调成红） */
+  if (u.rageMode && u.alive) {
+    ctx.save();
+    ctx.globalAlpha = .22 + .1 * Math.sin(G.t * 9);
+    ctx.filter = 'brightness(0) invert(1) sepia(1) saturate(8) hue-rotate(-40deg)';
     ctx.translate(x, y + bob);
     ctx.scale(face, 1);
     ctx.drawImage(spr, Math.round(-w / 2 * scale), Math.round(-(h - 3) * scale), Math.round(w * scale), Math.round(h * scale));

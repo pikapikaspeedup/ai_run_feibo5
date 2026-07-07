@@ -1,5 +1,6 @@
 import React from 'react';
 import { getG, getLevelChoices, pickLevelChoice, rerollLevelup, snoozePersonaIntro, choosePersonaFree } from '../../game/core.js';
+import { SUB_ICONS, ACTIVE_ICONS } from '../icons.js';
 
 /* v2.4 人设头像（portrait_<persona>.png，AI 生成切片） */
 const PORTRAITS = {};
@@ -53,6 +54,13 @@ export default function LevelUpScreen() {
                 {s.kind === 'skill' && pl.skills[s.id] ? <div className="k-stack">已持有 {pl.skills[s.id]}/{s.max}</div> : null}
                 {s.persona && PORTRAITS[s.persona] && (
                   <img src={PORTRAITS[s.persona]} alt="" style={{ width: 34, height: 34, imageRendering: 'pixelated', float: 'right', marginLeft: 6 }} />
+                )}
+                {/* v2.7 副武器/主动技能像素图标（缺图回退 emoji 前缀） */}
+                {s.kind === 'sub' && SUB_ICONS[s.id] && (
+                  <img src={SUB_ICONS[s.id]} alt="" style={{ width: 30, height: 30, imageRendering: 'pixelated', float: 'right', marginLeft: 6 }} />
+                )}
+                {s.kind === 'active' && ACTIVE_ICONS[s.id] && (
+                  <img src={ACTIVE_ICONS[s.id]} alt="" style={{ width: 30, height: 30, imageRendering: 'pixelated', float: 'right', marginLeft: 6 }} />
                 )}
                 <div className="k-name">{s.rare ? '✨ ' : s.kind === 'sub' ? '🔧 ' : s.kind === 'active' ? '⚡ ' : ''}{s.name}</div>
                 <div className="k-eff">{s.eff}</div>

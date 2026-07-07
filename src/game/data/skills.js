@@ -70,6 +70,12 @@ export const SKILLS = [
   { id: 'ctrl_cv', name: 'Ctrl+C / Ctrl+V', max: 1, rarity: '紫',
     eff: '击杀 8% 概率原地粘贴一个半透明分身帮打 6 秒',
     tag: '优秀同事，值得复制。', apply: m => m.ctrlCV = true },
+  { id: 'tactical_lie', name: '战术性躺平', max: 1, rarity: '绿',
+    eff: '站定 2 秒后就地躺平：敌人索敌范围减半（装尸体）',
+    tag: '躺都躺了，谁还打一个躺着的人。', apply: m => m.tacticalLie = true },
+  { id: 'mental_quit', name: '精神离职', max: 1, rarity: '蓝',
+    eff: '生命低于 30% 时攻速 +20%、移速 +10%（人还在，心已走）',
+    tag: '离职的心，打工的手。', apply: m => m.mentalQuit = true },
 
   { id: 'toxic_aura', name: '职场毒瘤', max: 3, eff: '身边 100px 敌人每秒 -2 HP',
     tag: '光是站在旁边都会掉血。', apply: m => m.auraDmg += 2 },

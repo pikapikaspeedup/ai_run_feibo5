@@ -39,6 +39,8 @@ export default function EndScreen({ win }) {
             <tr><td>最终职级</td><td>LV.{pl.level}</td></tr>
             <tr><td>随身武器</td><td>{wpnName(pl)}</td></tr>
             <tr><td>装备模组</td><td>{techCount} 个</td></tr>
+            {/* v2.8 付费上班结算彩蛋 */}
+            <tr><td>本局账单</td><td style={{ fontSize: 11 }}>通勤+工作餐 -{200 + pl.level * 10} · 窝囊费 +{200 + pl.level * 10} · 净赚 0（白干）</td></tr>
           </tbody></table>
           {!win && G.deathInfo && (
             <div className="quote" style={{ borderLeftColor: 'var(--danger)' }}>

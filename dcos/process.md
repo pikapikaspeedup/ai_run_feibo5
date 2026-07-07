@@ -1297,3 +1297,62 @@
   - ③计时器随波重置（startTrialSubWave）。
   - ④**keepDist 贴墙切向绕行**：后撤位移≈0（撞墙/地图边）→ 沿墙切向滑动，两边都堵死换向——不再缩在墙角扭动。
 - Verification（构造原事故现场）: 伪造 54/56 + pool 空 + 场上仅剩 2 只波次怪 → 2.5s 内残怪获 waveRush 标记；将 2 只直接 alive=false 蒸发（模拟最恶劣的漏计数）→ 对账补齐、**波次成功推进到第 2 波**（waveAdvanced=true）✅；npm run build 通过；控制台零 error。
+
+## 2026-07-07 - 武器平衡评估 v2（成长质变专项）
+
+- Requested: 玩家实测"回旋镖升满级也只有一个镖太垃圾"，要求重新评估武器平衡并出报告。
+- Delivered: **dcos/weapon-balance-review-v2.md**——双轴评估（满级 DPS 实测 × 升级质变审计）。
+- 核心发现: 12 把武器仅 2 把升级有质变（通义 Lv3/5 +弹、MiniMax Lv3 +炮台），其余 10 把 Lv1→Lv5 纯 ×1.3/级数值——与 6 把传说"每把独立机制"的设计标准严重不一致；DPS 带宽（场景修正后）51~196 约 4 倍，下位圈豆包/Gemini/DeepSeek/ChatGPT 又弱又无聊（四象限左下重灾区）。
+- 改造建议已入报告: 每把一条"看得见"的质变线（Lv3 小质变/Lv5 大质变）——回旋镖 Lv3 双镖 Lv5 三镖、豆包 2/3 豆、Gemini 三/四联装、DeepSeek 双/三管、ChatGPT 会心弹、Kimi 灼痕+缓存命中、Claude 快蓄宽束、GLM 4/5 链+末端爆、文心大饼半径+燃烧饼、Midjourney 出金弹型；多弹武器底伤微降防超模。待用户拍板后实施。
+
+## 2026-07-07 - 武器每级质变全面落地（v2.7）
+
+- Requested: 评估报告方案"Lv3/Lv5 两节点"仍不够——要更好的武器升级效果。
+- Implemented: 12 把武器全部改为 **Lv2/3/4/5 每级都有可见质变**（详表见 weapon-balance-review-v2.md §六）：机枪双管→三管、狙击缓存返CD+自动补射、回旋镖双镖→三镖、豆包 2→3 豆、Gemini 三联→四联+周期5联扇、ChatGPT 金色会心弹、Midjourney"出金"弹型+垫刀保底、文心燃烧饼+双饼、GLM 5链+末端爆、Claude 快蓄宽束+满蓄背刺束、MiniMax 部署提速+台寿命+台射速、通义聚拢+射程；弹丸尺寸随级微增（Lv5≈+24%）纯视觉练度感。底伤 9 把同步下调防多弹超模。
+- 排坑: chainZap 第 8 参被 stun 占用，endBoom 挪第 9 参；explodeAt burn 字段名是 t 不是 life；gacha 概率级联误改原四型等概率分布（改回 randi 保底）；Kimi Lv3 stun .3 会形成硬控链 → 降 .15；Kimi 返 CD 放 anyKills 段（杂鱼击杀也算）。
+- Verification: 全 12 把 Lv5+Lv1 双基准（6 靶串列 10s）——deepseek 64→144、gemini 51→113 下位翻身；kimi 420→303（压 stun/补射/底伤三刀）、wenxin 244→213；场景修正带宽 ≈2.8×；Lv1 全场 6~57 早期梯度健康；npm run build 通过；控制台零 error。
+
+## 2026-07-07 - 素材第五轮启动（v2.7 演出欠账 + 图标全家桶）+ 环境彩蛋 P2 实装
+
+- Requested: 继续用 codex 生成所有需要的素材（含动画帧）。
+- 生成任务（15 个，3 lane 并行, enrich4_batch.sh N/O/P）:
+  - Lane N（战斗演出 5）: fx_pot 一锅端天降大锅、fx_confetti 彩带（毕业/年度优秀共用）、fx_woodenfish 木鱼功德、fx_goldstar 出金/会心金星、fx_flash 合影闪光灯——全部 oneshot 九帧。
+  - Lane O（场景 5）: fx_burnpie 燃烧大饼 loop、proj_gold 金色会心弹 loop、fx_alarm 警报灯 loop、fx_paperrain A4 纸雨、fx_waterspill 水花——文心 Lv4 燃烧饼/ChatGPT 会心/MJ 出金/消防演习/环境彩蛋配套。
+  - Lane P（图标库图 5 张 4×4）: sub_sheet1/2（22 件副武器全量图标）、active_sheet1/2（32 个 Q/E 主动技能图标）。
+- 代码接线（生成期间同步完成）:
+  - render: ONESHOT_FX +8 项、fxLoop() 循环取帧 helper、G.burns 支持 spr 帧贴图（燃烧饼）。
+  - core 发射点: 一锅端 potfx、恭喜毕业/年度优秀 confettifx、功德每5声 woodenfishfx、出金/会心 goldstarfx+proj_gold sprKey、团建合影 flashfx（替换 nukefx 占位）、消防演习 alarmfx（life 8 慢放）、文心燃烧饼 spr 标记。
+  - **环境彩蛋 P2 实装**（onObstacleDestroyed）: 打印机→A4 纸雨+「又卡纸了」；饮水机/饮料柜→水花+水渍滑区（burns slow .35 4s，owner=玩家只滑敌人，speedOf 现成消费）+「小心地滑」；绿萝→「我做错了什么」；咖啡机→「终于能休息了」。
+  - UI 图标: src/components/icons.js（SUB_ICONS/ACTIVE_ICONS glob）→ LevelUpScreen GEAR/ACTIVE 卡 30px 图标、PauseScreen 副武器/Q/E 列表 16px 图标（缺图回退 emoji）。
+- 待唤醒收货: anim×10 切片、sheet×4 按键名语义切片（0 基索引防 zsh 坑）、build、fx/图标验证、报告。
+
+## 2026-07-07 - 环境特效层（素材 lane Q + 程序氛围全套）
+
+- Requested: 环境特效缺很多，很糟糕——办公室是"死棚子"：战斗不留痕、设施是静物、没有光没有空气。
+- 素材 lane Q（6 任务, enrich4_laneQ.sh）: env_decal_sheet（3×3 战斗残留贴花：大/小焦痕、墨渍溅/点、碎纸堆、工牌残骸、裂地砖、封条、灰堆→切 decal_f9..f17 并入贴花池）、fx_lightpool 顶灯光晕 loop、fx_acflow 空调飘带 loop、fx_printeridle 打印机吐纸 loop、fx_coolerbubble 饮水机气泡 loop、elevator_doors 电梯开门九帧 oneshot（gap#7 欠账）。
+- 程序接线（立即生效）:
+  - **战场记忆**: addBattleDecal()——爆炸留焦痕（大爆大痕 i9/小 i10）、牛马/精英倒下留墨渍 i11、杂鱼 25% 小渍 i12；上限 90 丢最老。实测杀 6 人 +6 渍 ✅。
+  - **环境点位**: newGame 生成 36 盏顶灯（每 chunk 中心）+ 18 个空调风口（隔行 chunk 顶边），render 用 fxLoop 画（素材未到货静默跳过）。
+  - **设施 idle**: 打印机吐纸抖动、饮水机气泡（复刻咖啡机蒸汽模式）；电梯门帧动画（开 0.5s 播帧/关前倒放，程序绘制回退）。
+  - **空气颗粒感**: 屏内低频漂浮尘埃（2.2/s 慢速灰粒，parts 管线复用，稳态 ~6 颗）实测 ✅。
+- Verification: lightSpots 36/acVents 18 ✅；动态 decal 6/6 ✅；尘埃粒子 ✅；渲染冒烟（fxLoop null 安全）✅；npm run build 通过。素材到货后（wakeup 收 N/O/P/Q 四 lane）：Q lane 切片——env_decal_sheet 用 slice_lib3.sh 命名 decal_f9..f17，4 个 loop + elevator_doors 用 slice_anim.sh。
+
+## 2026-07-07 - 素材第五轮收货验证（20/20 全量落地）
+
+- 收货: 四 lane 21 任务全部到货——战斗演出 fx×5（pot/confetti/woodenfish/goldstar/flash）、场景 fx×5（burnpie/proj_gold/alarm/paperrain/waterspill）、图标 sheet×4（22 副武器 sub_* + 32 主动技能 active_*）、环境 lane×6（env_decal_sheet→decal_f9..17、lightpool/acflow/printeridle/coolerbubble loop、elevator_doors 九帧）。generated/ 累计 1109 个 PNG。
+- 排坑: FX_ANIM glob 只收 fx_* 前缀——elevator_doors_f* 永远进不了容器（电梯门帧动画装死），合并第二个 glob 修复；验证脚本挪玩家后未跑 update 导致相机不跟随、屏幕中心采样全偏（waterspill/电梯门两项假阴性），挪人后 update 一帧即真阳。
+- Verification: fx 冒烟 10/10（含 burnpie 贴图燃烧区、lightpool 呼吸、alarmfx 慢放）✅；proj_gold 与 proj_chatgpt 会心混流 ✅；UI 图标三处上屏（升级 GEAR 卡 sub_laserpen/ACTIVE 卡 active_blink、暂停页 16px 图标）✅；环境彩蛋实弹（机枪打爆打印机→纸雨+「又卡纸了」、饮水机→水花+「小心地滑」+滑区 burns）✅；电梯门开合帧、打印机吐纸 idle、顶灯光晕呼吸 ✅；目检 fx_pot 铁锅砸地/sub_stapler 红订书机/active_talk_invite 约谈桌/decal_f9 焦痕/elevator_doors_f4 半开门/coolerbubble 水桶 ✅；npm run build 通过；控制台零 error。
+
+## 2026-07-07 - v2.8 全量落地：小 Boss 重做 + 梗怪二期 14 只 + 梗事件/技能/道具/文案（设计文档全案实施）
+
+- Requested: "都整，不要担心时间，好好整上，好玩就好！"——miniboss-mobs-design-v2.8.md P0~P3 全量开发。
+- **P0 小 Boss 重做**（6 考核官+6 部门 Boss 继承）:
+  - 通用框架: 登场亮相（1s 定格+开场台词+震屏）、**半血红温**（怒吼击退波+提速 15%+体型+10%+红色剪影脉动 tint）、全程嘴替（BOSS_QUIPS 12 Boss×5 时机 60+ 句台词，3s 冷却局内不重复）、死亡演出（遗言+0.25s 顿帧+离职播报）。
+  - 六套二阶段 cast2: PPT**掀真桌子**砸人（家具从场上消失）+五连激光；向上管理**偷玩家 buff** 穿身上（击杀加息 1.3× 归还）；小报告**举报信雷阵**（可被子弹引爆拆除）+匿名疾跑半透明；会议主宰**闭门会议结界**（r140 出圈掉血+散会超长破绽）；卷王实习生**吞地面芯片自我升级**（死亡连本带利吐出+1 块）；考勤官**全员打卡**（3 根光柱 3.5s 内碰任一→Boss 破绽 2.5s，超时旷工重罚）。
+  - render: 红温剪影滤镜、结界旋转虚线圈、打卡机金色呼吸柱。
+- **F1/F5 文案**: 窝囊费到账播报（xp 拾取 3s 节流）、灵活就业死亡文案×2、面试黑话 tips×4、耗材文案、付费上班结算彩蛋（EndScreen 账单行）、开工全场齐呼"早安打工人"、死亡遗言池（human/ai 分池含"在我电脑上是好的"）、flee 池+创业/idle 池+社畜。
+- **P1 事件 6**: 🏛️编制降临（金 offer 落地全场怪抢着上岸，玩家先到大奖/怪碰到作废——实测可抢）、🎂35 岁警报（随机在场精英被系统当场优化，白给掉落——实测真裁）、📅调休通知（BR 怪潮+“调休已到账 0.5 天”）、🐺狼性培训（敌人互咬 6s）、📉组织扁平化（全场精英降级 5s）、🚇早高峰（12 只减速怪四边涌入）。
+- **P1 技能 3 + 道具 2**: 战术性躺平（站定 2s 躺倒贴图旋转 90°+索敌减半，接 aggro 消费点）、就地摆烂 Q（坐下无敌不能动"爱咋咋地"）、精神离职（<30% 血攻速+20%移速+10%）；毕业大礼包（HRBP 劝退掉落+开 2 件）、创业计划书（60% 全属性+15% / 40% 天使轮跳票扣血）。
+- **P1+P2 梗怪 14 只**（16 组九帧立绘全到货切片）: 复印机成精（吐纸人+死亡全场纸人碎屑雨）、A4 纸人、人体工学椅（台球反弹+3 撞喘气——实测反弹中）、提桶跑路侠（30s 抓不到挥手跑路/被抓桶=毕业礼包+道具）、咖啡因狂人（布朗运动+每 6s 自撞晕 2s）、裁员纸箱人（**纸箱传承**：死后箱子留 8s 其他怪捡走+20% 血转世）、楼道抽烟怪（烟雾遮罩+15% 闪避）、干电池人（电量打空瘫痪 3s 补刀窗口否则满血复活——实测瘫痪）、KPI 曲线蛇（8 节链式跟随+断口重生新头——spawnMob 挂链）、需求文档塔（5 层血掉层变矮变快+死亡纸张雪崩）、年会主持人（把杂鱼编 4 列方阵推进+死亡方阵散伙逃 3s）、HR 磁铁（吸 2s 推 2s 循环——实测相位运转）、00后整顿人（**中立怪专打精英/Boss**）、精神内耗小人（原地自斗掉血+被打短暂反击）、屎山代码巨兽（大体型减速拖尾）；波次编排入月 2~5 + BR 池 6 只。
+- 素材: 4 lane 20 任务全到货（16 mob + fx_paperburst/avalanche/smokezone/offer），目检复印机/00后卫衣/屎山面团全在线。
+- Verification: tier2 亮相→半血红温→cast2 全链路（attendance 抽验）✅；事件 6/6 全触发（编制可抢+35 岁真裁）✅；椅子反弹/电池瘫痪/磁铁相位/躺平/摆烂锁定+无敌/精神离职爆发 ✅；npm run build 通过；控制台零 error。

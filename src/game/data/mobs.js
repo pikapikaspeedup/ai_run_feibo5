@@ -87,6 +87,39 @@ export const MOBS = {
     keepDist: 210, keepDistTol: 40, fireCd: 3.2, fireBulletDmg: 2, fireBulletSpd: 150,
     fireBulletRange: 300, fireTriggerR: 300, fireBulletVuln: { t: 2.5, bonus: .2 } },
 
+  /* ===== v2.8 梗怪二期（画面梗优先，行为见 core updateMob 对应分支，设计 dcos/miniboss-mobs-design-v2.8.md） ===== */
+  copier_mother: { name: '复印机成精', hp: 90, spd: 42, touch: 5, xp: 12, jig: false, spr: 'mob_copier',
+    spawner: { type: 'paper_minion', cd: 2.5, cap: 5 } },
+  paper_minion: { name: 'A4 纸人', hp: 1, spd: 150, touch: 1.5, xp: .5, jig: true, spr: 'mob_paperman' },
+  chair_crazy: { name: '人体工学椅暴走', hp: 26, spd: 0, touch: 0, xp: 6, jig: false, spr: 'mob_chairdrift',
+    bounce: { spd: 240, dmg: 14, rest: 1.2, restEvery: 3 } },
+  bucket_runner: { name: '提桶跑路侠', hp: 30, spd: 124, touch: 0, xp: 8, jig: false, spr: 'mob_bucket',
+    fleeOnly: { ttl: 30 } },
+  caffeine_maniac: { name: '咖啡因过载狂人', hp: 18, spd: 170, touch: 4, xp: 5, jig: true, spr: 'mob_caffeine',
+    brownian: { crashEvery: 6, stunDur: 2 } },
+  box_walker: { name: '裁员纸箱人', hp: 24, spd: 88, touch: 4, xp: 4, jig: false, spr: 'mob_boxman',
+    boxLegacy: true },
+  smoker: { name: '楼道抽烟怪', hp: 40, spd: 0, touch: 5, xp: 6, jig: false, spr: 'mob_smoker',
+    smokeZone: 80, dodgeOverride: .15 },
+  battery_man: { name: '干电池人', hp: 30, spd: 92, touch: 4.5, xp: 7, jig: false, spr: 'mob_battery',
+    battery: { paralyzeDur: 3 } },
+  kpi_snake_head: { name: 'KPI 曲线蛇', hp: 30, spd: 118, touch: 5, xp: 8, jig: false, spr: 'mob_snakehead',
+    snakeHead: { segs: 8 } },
+  kpi_snake_body: { name: '季度指标节点', hp: 14, spd: 118, touch: 3, xp: 2, jig: false, spr: 'mob_snakebody',
+    snakeBody: true },
+  doc_tower: { name: '需求文档塔', hp: 150, spd: 30, touch: 8, xp: 16, jig: false, spr: 'mob_doctower',
+    tower: { layers: 5, spdStep: .3, sizeStep: .15, avalancheR: 70, avalancheDmg: 24 } },
+  party_host: { name: '年会主持人', hp: 55, spd: 66, touch: 3, xp: 12, jig: false, spr: 'mob_host',
+    formation: { r: 300, cols: 4, gap: 18 } },
+  hr_magnet: { name: 'HR 磁铁', hp: 45, spd: 58, touch: 5, xp: 9, jig: false, spr: 'mob_magnet',
+    magnet: { r: 130, pull: 62, phase: 2 } },
+  gen_z: { name: '00后整顿人', hp: 60, spd: 105, touch: 0, xp: 14, jig: false, spr: 'mob_genz',
+    vigilante: { dmg: 12, cd: 1.1 } },
+  neihao_twins: { name: '精神内耗小人', hp: 55, spd: 70, touch: 3, xp: 7, jig: false, spr: 'mob_neihao',
+    selfFight: { dps: .02, counterT: 3 } },
+  shit_mountain: { name: '屎山代码巨兽', hp: 260, spd: 26, touch: 10, xp: 30, jig: false, spr: 'mob_shitmount',
+    slowTrail: { r: 26, slow: .3, life: 2.5 } },
+
   /* v2.0 公共事故：正式大逃杀阶段周期出现；处理成功给 KPI，失败涨锅值 */
   incident_outage: { name: '线上故障公告牌', hp: 86, spd: 0, touch: 0, xp: 14, jig: false, spr: 'mob_deadline',
     publicIncident: '线上故障', incidentLife: 24, incidentSpawn: 'message_recall', incidentSpawnCd: 4, potFail: 18, kpiReward: 24 },
@@ -139,27 +172,27 @@ export function subWaves(month) {
   ];
   if (month === 2) return [
     /* 26/34/42（原 30/38/46，微降平滑难度曲线）；v2.2 引入冲锋/自爆两种新行为 */
-    [{ type: 'email', count: 19 }, { type: 'sticky', count: 7 }],
+    [{ type: 'email', count: 19 }, { type: 'sticky', count: 7 }, { type: 'chair_crazy', count: 2 }],
     [{ type: 'email', count: 12 }, { type: 'cc_bomb', count: 10 }, { type: 'wolf_culture', count: 4 }, { type: 'meeting_invite', count: 8 }],
-    [{ type: 'email', count: 16 }, { type: 'message_recall', count: 11 }, { type: 'phishing_mail', count: 9 }, { type: 'kpi_balloon', count: 6 }],
+    [{ type: 'email', count: 16 }, { type: 'message_recall', count: 11 }, { type: 'phishing_mail', count: 9 }, { type: 'kpi_balloon', count: 6 }, { type: 'box_walker', count: 4 }],
   ];
   if (month === 3) return [
     /* 44/48/56；v2.2 引入召唤/牵引/偷窃 */
-    [{ type: 'email', count: 22 }, { type: 'sticky', count: 10 }, { type: 'cc_bomb', count: 10 }, { type: 'hr_intern', count: 2 }],
+    [{ type: 'email', count: 22 }, { type: 'sticky', count: 10 }, { type: 'cc_bomb', count: 10 }, { type: 'hr_intern', count: 2 }, { type: 'copier_mother', count: 1 }, { type: 'caffeine_maniac', count: 3 }],
     [{ type: 'email', count: 18 }, { type: 'meeting_invite', count: 10 }, { type: 'message_recall', count: 12 }, { type: 'meeting_blackhole', count: 2 }, { type: 'urgent_meeting', count: 6 }],
-    [{ type: 'email', count: 14 }, { type: 'phishing_mail', count: 10 }, { type: 'cc_bomb', count: 12 }, { type: 'wolf_culture', count: 6 }, { type: 'salary_thief', count: 2 }, { type: 'outsourced_army', count: 2 }],
+    [{ type: 'email', count: 14 }, { type: 'phishing_mail', count: 10 }, { type: 'cc_bomb', count: 12 }, { type: 'wolf_culture', count: 6 }, { type: 'salary_thief', count: 2 }, { type: 'outsourced_army', count: 2 }, { type: 'hr_magnet', count: 2 }],
   ];
   if (month === 4) return [
     /* 50/56/62；v2.2 引入拖尾坦克/易伤射手/站桩死线警报 */
-    [{ type: 'email', count: 24 }, { type: 'cr', count: 12 }, { type: 'sticky', count: 10 }, { type: 'overtime_snail', count: 3 }, { type: 'deadline_alarm', count: 2 }],
-    [{ type: 'email', count: 16 }, { type: 'cc_bomb', count: 14 }, { type: 'meeting_invite', count: 10 }, { type: 'pua_master', count: 4 }, { type: 'kpi_balloon', count: 8 }, { type: 'urgent_meeting', count: 4 }],
-    [{ type: 'email', count: 20 }, { type: 'outsourced_army', count: 3 }, { type: 'overtime_rework', count: 10 }, { type: 'phishing_mail', count: 8 }, { type: 'wolf_culture', count: 6 }, { type: 'hr_intern', count: 2 }],
+    [{ type: 'email', count: 24 }, { type: 'cr', count: 12 }, { type: 'sticky', count: 10 }, { type: 'overtime_snail', count: 3 }, { type: 'deadline_alarm', count: 2 }, { type: 'doc_tower', count: 1 }],
+    [{ type: 'email', count: 16 }, { type: 'cc_bomb', count: 14 }, { type: 'meeting_invite', count: 10 }, { type: 'pua_master', count: 4 }, { type: 'kpi_balloon', count: 8 }, { type: 'urgent_meeting', count: 4 }, { type: 'battery_man', count: 4 }, { type: 'neihao_twins', count: 2 }],
+    [{ type: 'email', count: 20 }, { type: 'outsourced_army', count: 3 }, { type: 'overtime_rework', count: 10 }, { type: 'phishing_mail', count: 8 }, { type: 'wolf_culture', count: 6 }, { type: 'hr_intern', count: 2 }, { type: 'copier_mother', count: 1 }, { type: 'caffeine_maniac', count: 3 }],
   ];
   /* 月 5+ · 60/68/80 全料（v2.2 全行为品类混编 + 需求评审会据点） */
   return [
-    [{ type: 'email', count: 24 }, { type: 'cr', count: 12 }, { type: 'cc_bomb', count: 12 }, { type: 'kpi_balloon', count: 8 }, { type: 'salary_thief', count: 3 }, { type: 'req_review_board', count: 2 }],
-    [{ type: 'email', count: 20 }, { type: 'meeting_invite', count: 12 }, { type: 'urgent_meeting', count: 8 }, { type: 'wolf_culture', count: 8 }, { type: 'overtime_snail', count: 4 }, { type: 'meeting_blackhole', count: 3 }, { type: 'outsourced_army', count: 3 }],
-    [{ type: 'email', count: 22 }, { type: 'overtime_rework', count: 12 }, { type: 'read_no_reply_ultimate', count: 6 }, { type: 'phishing_mail', count: 10 }, { type: 'pua_master', count: 6 }, { type: 'hr_intern', count: 3 }, { type: 'deadline_alarm', count: 3 }, { type: 'cc_bomb', count: 12 }],
+    [{ type: 'email', count: 24 }, { type: 'cr', count: 12 }, { type: 'cc_bomb', count: 12 }, { type: 'kpi_balloon', count: 8 }, { type: 'salary_thief', count: 3 }, { type: 'req_review_board', count: 2 }, { type: 'copier_mother', count: 1 }, { type: 'gen_z', count: 1 }, { type: 'chair_crazy', count: 3 }],
+    [{ type: 'email', count: 20 }, { type: 'meeting_invite', count: 12 }, { type: 'urgent_meeting', count: 8 }, { type: 'wolf_culture', count: 8 }, { type: 'overtime_snail', count: 4 }, { type: 'meeting_blackhole', count: 3 }, { type: 'outsourced_army', count: 3 }, { type: 'shit_mountain', count: 1 }, { type: 'battery_man', count: 5 }],
+    [{ type: 'email', count: 22 }, { type: 'overtime_rework', count: 12 }, { type: 'read_no_reply_ultimate', count: 6 }, { type: 'phishing_mail', count: 10 }, { type: 'pua_master', count: 6 }, { type: 'hr_intern', count: 3 }, { type: 'deadline_alarm', count: 3 }, { type: 'cc_bomb', count: 12 }, { type: 'kpi_snake_head', count: 1 }, { type: 'party_host', count: 1 }, { type: 'hr_magnet', count: 3 }],
   ];
 }
 
@@ -167,6 +200,8 @@ export function subWaves(month) {
 export const BR_MOB_POOL = [
   'email', 'cc_bomb', 'kpi_balloon', 'wolf_culture', 'salary_thief',
   'pua_master', 'overtime_snail', 'meeting_blackhole', 'phishing_mail', 'deadline_alarm',
+  /* v2.8 梗怪二期 */
+  'chair_crazy', 'caffeine_maniac', 'box_walker', 'battery_man', 'hr_magnet', 'neihao_twins',
 ];
 
 export function waveComp(month) {

@@ -15,4 +15,7 @@ export const CONSUMABLES = {
   noise_cancel_headset: { name: '降噪耳机', spr: 'reset', desc: '清除举报/诅咒/减速，短暂提速' },
   power_bank: { name: '共享充电宝', spr: 'quota', desc: '主动技能和冲刺冷却大幅缩短' },
   admin_supply_bag: { name: '行政补给袋', spr: 'milktea', desc: '拆出一个生存补给和一个回血包' },
+  /* v2.8 梗道具 */
+  grad_gift: { name: '毕业大礼包', spr: 'doc2n', desc: '被裁同事的遗产：开出 2 件随机物资' },
+  startup_plan: { name: '创业计划书', spr: 'doc', desc: '赌一把：60% 全属性提升 20 秒，40% 天使轮跳票扣血' },
 };
