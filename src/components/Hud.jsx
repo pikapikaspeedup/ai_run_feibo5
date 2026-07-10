@@ -85,15 +85,19 @@ export default function Hud() {
   else {
     const rp = recipePartner(w.id);
     hint = w.lvl >= 5
-      ? (chipObtainable(rp.partner)
+      ? (rp && chipObtainable(rp.partner)
         ? <>满级！找 <b>{WEAPONS[rp.partner].name}</b> 芯片按 F 融合 →「{LEGENDS[rp.leg].name}」</>
         : <>满级！搭档芯片已绝版——按 E 换装其他芯片再练</>)
-      : <>捡同款芯片升级（{w.lvl}/5）· 融合搭档：{WEAPONS[rp.partner].name}</>;
+      : <>捡同款芯片升级（{w.lvl}/5）· 融合搭档：{rp ? WEAPONS[rp.partner].name : '无'}</>;
     if (def.kind === 'charge') hint = <>按住鼠标蓄力，松开发射 · {hint}</>;
+    if (def.kind === 'swing') hint = <>近战横扫：敌人进刀圈自动挥 · {hint}</>;
+    if (def.kind === 'spray') hint = <>按住持续喷射（减速+压制） · {hint}</>;
+    if (def.kind === 'orbit') hint = <>环绕自动连击，无需瞄准 · {hint}</>;
   }
-  /* v2.3 双持状态 */
+  /* v2.9.2 多武器状态（VS 模式：升级抽卡里选新武器上岗，最多 4 把） */
   if (pl.weapon2) hint = <>{hint} · 🗡副手 {WEAPONS[pl.weapon2.id].name} Lv.{pl.weapon2.lvl}</>;
-  else if (pl.weapon2Unlocked) hint = <>{hint} · 🗡副手槽空缺：捡异款芯片自动装备</>;
+  if (pl.weapon3) hint = <>{hint} · 📎三号 {WEAPONS[pl.weapon3.id].name} Lv.{pl.weapon3.lvl}</>;
+  if (pl.weapon4) hint = <>{hint} · 📎四号 {WEAPONS[pl.weapon4.id].name} Lv.{pl.weapon4.lvl}</>;
 
   /* 拾取提示 */
   const hc = G.hoverChip;
@@ -226,7 +230,7 @@ export default function Hud() {
             <div id="wpn-name">
               {w.leg
                 ? <><span className="leg-name">「{def.name}」</span><small>传说</small></>
-                : <>{def.name}<small>{def.country === 'CN' ? '国产' : '硅谷'}</small></>}
+                : <>{def.name}<small>{def.country === 'CN' ? '国产' : def.country === 'OF' ? '办公' : '硅谷'}</small></>}
             </div>
             <div id="wpn-pips">
               {[0, 1, 2, 3, 4].map(i => (

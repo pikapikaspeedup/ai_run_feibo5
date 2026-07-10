@@ -57,6 +57,24 @@ export const WEAPONS = {
     pat: '工位钉子户：部署固定炮台，最多 3 座同时驻场',
     /* v2.3 手感修复：射速 .75→.5、伤害 6→8、部署更勤、驻场更久——原版弹慢+无预判，对移动小怪十打九空 */
     kind: 'totem', cd: 2.2, dmg: 8, shotCd: .5, deployLife: 14, maxDeploy: 3, range: 220 },
+
+  /* ---- v2.9 办公室武器科 4 把（近战割草线，country: 'OF'） ---- */
+  keyboard: { name: '客制化机械键盘', country: 'OF', color: '#9fb3d1',
+    tagline: '茶轴的声音，就是绩效的声音',
+    pat: '近战弧形横扫：一梭子敲过去，像在回复"收到"；满级每三刀一次 Ctrl+A 全选旋风',
+    kind: 'swing', cd: .55, dmg: 16, reach: 62, arc: 2.0, kb: 26, range: 70 },
+  chairspin: { name: '人体工学椅', country: 'OF', color: '#4ec9a0',
+    tagline: '公司唯一支持你的东西',
+    pat: '环绕连击：椅子绕体旋转谁贴谁疼，站桩挂机型近战',
+    kind: 'orbit', cd: .5, dmg: 6.5, orbs: 2, orbR: 34, orbSpd: 3.2, hitCd: .5, range: 50 },
+  extinguisher: { name: '楼道灭火器', country: 'OF', color: '#ff5f5f',
+    tagline: '平时没人看它一眼，出事第一个想起它',
+    pat: '锥形持续喷射：贴脸压制+减速，满级持续喷会过热爆炸',
+    kind: 'spray', cd: .09, dmg: 2.6, tickCd: .09, half: .42, range: 95 },
+  stapler: { name: '红色订书机', country: 'OF', color: '#e8b23d',
+    tagline: '全公司抢着用的那一台',
+    pat: '高频短刺：穿透三连，把需求钉死在墙上；满级每第五发一枚眩晕大钉',
+    kind: 'stab', cd: .18, dmg: 4.5, spd: 380, range: 78, pierce: 3 },
 };
 
 export const LEGENDS = {
@@ -89,9 +107,20 @@ export const LEGENDS = {
     pat: '巨型带电 X 回旋镖，回程吸收敌弹后额外反怼',
     kind: 'leg_boom', cd: 1.25, dmg: 30, spd: 285, range: 210, zapCd: .23, zapDmg: 9.5, chains: 4,
     absorbR: 42, absorbDmg: 7 },
+  /* ---- v2.9 办公室近战线传说 ×2 ---- */
+  grinder: { name: '工位绞肉机', color: '#ff8a3d',
+    tagline: '键盘是刀，转椅是引擎，工位就是绞肉机。',
+    pat: '4 把巨型键盘刀环绕 + 每 2.2s 一次 360° 冲击波（伤害+击退清场）',
+    kind: 'leg_grinder', cd: .5, dmg: 26, orbs: 4, orbR: 48, orbSpd: 4.2, hitCd: .35, range: 60,
+    novaCd: 2.2, novaR: 95, novaDmg: 40, novaKb: 60 },
+  safety_month: { name: '安全生产月', color: '#ff5f8a',
+    tagline: '消防演习失控现场：泡沫管够，订书钉管饱。',
+    pat: '超宽锥形喷射（强减速）+ 每 0.35s 沿准星射出穿透订书钉 + 持续铺泡沫地面',
+    kind: 'leg_spray', cd: .08, dmg: 4, tickCd: .08, half: .6, range: 135,
+    stapleCd: .35, stapleDmg: 18, staplePierce: 6 },
 };
 
-/* 融合配方：满级武器 + 另一品牌芯片 -> 传说。12 把全部 2-2 配对，无孤儿。 */
+/* 融合配方：满级武器 + 另一品牌芯片 -> 传说。16 把全部 2-2 配对，无孤儿。 */
 export const RECIPES = [
   ['deepseek', 'chatgpt', 'agi'],
   ['qwen', 'doubao', 'price_war'],
@@ -99,6 +128,9 @@ export const RECIPES = [
   ['wenxin', 'midjourney', 'pie_feast'],
   ['kimi', 'gemini', 'infinite_ctx'],
   ['glm', 'grok', 'mouthpiece'],
+  /* v2.9 办公室近战线 */
+  ['keyboard', 'chairspin', 'grinder'],
+  ['extinguisher', 'stapler', 'safety_month'],
 ];
 
 export function findRecipe(a, b) {

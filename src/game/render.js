@@ -3,7 +3,7 @@
  * ===================================================================== */
 import { VIEW_W, VIEW_H, TUNE, MOBILE_ZOOM } from './constants.js';
 import { rand, dist, dist2, clamp } from './utils.js';
-import { WEAPONS } from './data/weapons.js';
+import { WEAPONS, LEGENDS } from './data/weapons.js';
 import { wdef } from './data/weapons.js';
 import { CONSUMABLES } from './data/consumables.js';
 import { MOBS } from './data/mobs.js';
@@ -1111,6 +1111,46 @@ function drawUnit(ctx, G, u) {
     ctx.fillText('约谈中', x, y - 37);
     ctx.textAlign = 'left';
   }
+  /* v2.9 环绕近战可视化：人体工学椅 / 工位绞肉机键盘刀（任意武器槽持有都画） */
+  if (u.alive) {
+    for (const slot of [u.weapon, u.weapon2, u.weapon3, u.weapon4]) {
+      if (!slot) continue;
+      const sd = slot.leg ? LEGENDS[slot.leg] : WEAPONS[slot.id];
+      if (!sd || (sd.kind !== 'orbit' && sd.kind !== 'leg_grinder')) continue;
+      const leg = sd.kind === 'leg_grinder';
+      const n = leg ? sd.orbs : sd.orbs + (slot.lvl >= 2 ? 1 : 0) + (slot.lvl >= 4 ? 1 : 0);
+      const R = (sd.orbR + (!leg && slot.lvl >= 3 ? 10 : 0)) * (u.mods ? u.mods.range : 1);
+      for (let i = 0; i < n; i++) {
+        const oa = (slot.orbAng || 0) + i * Math.PI * 2 / n;
+        const ox = x + Math.cos(oa) * R, oy = y - 4 + Math.sin(oa) * R;
+        ctx.save();
+        ctx.translate(ox, oy);
+        ctx.rotate(oa + Math.PI / 2);
+        if (leg) {
+          /* 键盘刀：灰蓝板 + 键帽点 + 白刃 */
+          ctx.fillStyle = '#2a2e38'; ctx.fillRect(-6, -4, 12, 8);
+          ctx.fillStyle = '#9fb3d1'; ctx.fillRect(-5, -3, 10, 6);
+          ctx.fillStyle = '#e8ecf4';
+          for (let kx = -4; kx <= 3; kx += 2) for (let ky = -2; ky <= 1; ky += 2) ctx.fillRect(kx, ky, 1, 1);
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(-6, -5, 12, 1);
+        } else {
+          /* 人体工学椅：座+靠背+滚轮 */
+          ctx.fillStyle = '#1d5f46'; ctx.fillRect(-4, -3, 8, 6);
+          ctx.fillStyle = '#4ec9a0'; ctx.fillRect(-3, -2, 6, 4);
+          ctx.fillStyle = '#2a7a5a'; ctx.fillRect(-4, -5, 8, 2);
+          ctx.fillStyle = '#14161d'; ctx.fillRect(-3, 3, 2, 1); ctx.fillRect(1, 3, 2, 1);
+        }
+        ctx.restore();
+      }
+      /* 转动拖影 */
+      if (Math.random() < .3) {
+        ctx.globalAlpha = .25;
+        ctx.strokeStyle = sd.color; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(x, y - 4, R, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
   /* 副武器可视化：显示器回旋盾 / 碎纸机光环 */
   if (u.isPlayer && u.subs.monitor) {
     const s = u.subs.monitor;
@@ -1355,6 +1395,20 @@ function drawFx(ctx, f) {
       ctx.fillStyle = f.color;
       ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1 - k * .6), 0, Math.PI * 2); ctx.fill();
     }
+  } else if (f.type === 'slash') {
+    /* v2.9 近战弧光：扇形楔从窄到全弧展开，边缘亮线拖白 */
+    const sweep = Math.min(1, (1 - k) * 2.5);   // 前 40% 时间完成展开
+    const a0 = f.ang - f.arc / 2, a1 = a0 + f.arc * sweep;
+    ctx.globalAlpha = k * .38;
+    ctx.fillStyle = f.color;
+    ctx.beginPath(); ctx.moveTo(f.x, f.y);
+    ctx.arc(f.x, f.y, f.r, a0, a1); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = k * .9;
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(f.x, f.y, f.r - 1, Math.max(a0, a1 - .5), a1); ctx.stroke();
+    ctx.globalAlpha = k * .6;
+    ctx.strokeStyle = f.color; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(f.x, f.y, f.r * .7, a0, a1); ctx.stroke();
   } else if (f.type === 'spark') {
     /* 子弹命中火花（素材未加载时静默跳过——命中粒子仍在） */
     const fr = fxFrame('fx_spark', 1 - k);

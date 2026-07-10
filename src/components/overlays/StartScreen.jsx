@@ -133,6 +133,12 @@ export default function StartScreen() {
                   <DexIcon color={d.color} /><span className="d-name d-us">{d.name}</span><span className="d-pat">{d.pat}</span>
                 </div>
               ))}
+              <div className="dex-sec">— 办公室武器科（v2.9 近战割草线，楼道里捡的）—</div>
+              {wRows('OF').map(([id, d]) => (
+                <div className="dex-row" key={id}>
+                  <DexIcon color={d.color} /><span className="d-name" style={{ color: '#c9a227' }}>{d.name}</span><span className="d-pat">{d.pat}</span>
+                </div>
+              ))}
               <div className="dex-sec">— 传说融合 —</div>
               {RECIPES.map(([a, b, leg]) => (
                 <div className="dex-row" key={leg}>

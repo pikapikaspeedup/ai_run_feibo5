@@ -40,7 +40,10 @@ function setState(s) {
 }
 
 export const cam = { x: 0, y: 0, shake: 0 };
-export function addShake(v) { cam.shake = Math.min(8, cam.shake + v); }
+/* v2.8.5 震屏加距离门槛：50 人大逃杀里全图各处随时在打架/爆炸，
+ * 之前不管远近一律全局震屏——玩家看到的是安静画面却在疯狂抖。
+ * 传 (x,y) 时只有事件在镜头附近才生效；不传视为玩家自身动作，照旧全局。 */
+export function addShake(v, x, y) { if (x != null && !nearPlayer(x, y)) return; cam.shake = Math.min(8, cam.shake + v); }
 
 /* ---------- 开火模式（桌面）：手动 / 自动开火 / 全托管 ——触控板玩家友好 ---------- */
 export const FIRE_MODES = ['手动', '自动开火', '全托管'];
@@ -198,7 +201,8 @@ export const wpnDmg = u => {
   const grow = def.kind === 'drone' ? 1.2 : 1.3;   // v18 Bug 3 修：drone 1.15→1.20，Lv.5 lvlMult 1.749→2.074 补齐欠模
   const lvlMult = u.weapon.leg ? 1 : Math.pow(grow, u.weapon.lvl - 1);
   const empower = u.empowerT > 0 ? 1.25 : 1;        // 向上管理光环
-  return def.dmg * lvlMult * u.mods.dmg * empower * (u._offhand ? .55 : 1);   // 双持副手 55% 伤害
+  /* v2.9 副手 55%→70%（解锁了也像装饰）；三/四号位独立自瞄 50% */
+  return def.dmg * lvlMult * u.mods.dmg * empower * (u._offhand ? .7 : 1) * (u._offhand3 ? .5 : 1) * (u._offhand4 ? .5 : 1);
 };
 export const droneCount = (u, def) =>
   def.kind === 'drone' ? Math.min(3, def.drones + Math.floor((u.weapon.lvl - 1) / 2)) : def.drones;
@@ -395,6 +399,10 @@ function newGame(trialMonths = 0, botCount = 19) {
   const player = makeUnit('你（牛马本马）', W / 2 + Math.cos(pa) * 350, W / 2 + Math.sin(pa) * 350,
     { isPlayer: true, hp: TUNE.playerHp, spd: TUNE.playerSpeed, weaponId: pick(wIds), shirt: '#ffcf33' });
   player.subSlotCount = MAX_SUB_SLOTS;   // 里程碑事件解锁到4，见 unlockSubSlot()
+  /* v2.9.2 多武器=VS 模式：武器卡进升级卡池——选已有的=升一级，选新的=装进下一个空槽，
+   * 上限 4 把（主 100% / 副手同向齐射 70% / 三四号位独立自瞄 50%），无任何等级门槛。
+   * 宽（铺枪）vs 深（单枪速满级+技能）由每次升级的机会成本定价；地面芯片=纯运气位（升已有/换主枪） */
+  player.weapon3 = null; player.weapon4 = null;
   g.units.push(player);
   g.player = player;
 
@@ -566,8 +574,8 @@ function onObstacleDestroyed(o) {
   }
   /* 粒子 + SFX */
   addParts(cx, cy, o.cover === 'T1' ? '#8a6a4a' : '#c9c4b4', 18, 90, .6);
-  addShake(2);
-  SFX.explo();
+  addShake(2, cx, cy);
+  if (nearPlayer(cx, cy)) SFX.explo();
   /* v2.7 环境彩蛋（设计文档 P2）：办公室家具的临终演出 */
   if (o.spr === 'printer') {
     addFx({ type: 'paperrainfx', x: cx, y: cy - 8, r: 26, life: 1.2 });
@@ -628,7 +636,7 @@ function onObstacleDestroyed(o) {
       if (dstIds.length) {
         G.player.distills[pick(dstIds)] = true;
         addFloat(cx, cy - 20, '🔓 上锁文件柜：解锁蒸馏！', '#b665ff', 10, 1.6);
-        addShake(3); SFX.fuse();
+        addShake(3, cx, cy); if (nearPlayer(cx, cy)) SFX.fuse();
       }
     }
   }
@@ -657,8 +665,8 @@ function onObstacleDestroyed(o) {
       if (!u.alive || u.isPlayer) continue;
       if (dist2(cx, cy, u.x, u.y) < 60 * 60) applyDamage(u, 30, G.player, { stun: .2 });
     }
-    addShake(5);
-    SFX.mushroom();   // 覆盖默认 explo SFX（更震撼）
+    addShake(5, cx, cy);
+    if (nearPlayer(cx, cy)) SFX.mushroom();   // 覆盖默认 explo SFX（更震撼）
   } else if (loot.special === 'slow_pool') {
     /* 饮水机爆：60 半径 8s 减速地面 */
     G.burns.push({ x: cx, y: cy, r: 60, dps: 0, slow: .4, life: 8, t: 0, owner: G.player, color: '#38d3e8' });
@@ -1169,6 +1177,117 @@ function updateWeapon(u, dt, wantFire, aimA) {
     return;
   }
 
+  /* ===== v2.9 办公室近战线 ===== */
+  /* 人体工学椅 / 工位绞肉机：环绕连击——常驻旋转，无视 wantFire（站桩挂机型割草）
+   * 同目标命中间隔用 WeakMap 记时间戳（死单位自动 GC），多椅不叠加同一跳 */
+  if (kind === 'orbit' || kind === 'leg_grinder') {
+    const leg = kind === 'leg_grinder';
+    const n = leg ? def.orbs : def.orbs + (w.lvl >= 2 ? 1 : 0) + (w.lvl >= 4 ? 1 : 0);
+    const R = (def.orbR + (!leg && w.lvl >= 3 ? 10 : 0)) * u.mods.range;
+    const spin = def.orbSpd * (!leg && w.lvl >= 3 ? 1.25 : 1) * Math.min(1.6, Math.max(1, fireRateOf(u) * .6));
+    w.orbAng = (w.orbAng || 0) + dt * spin;
+    if (!w._orbMap) w._orbMap = new WeakMap();
+    const hitCd = leg ? def.hitCd : (w.lvl >= 5 ? .38 : def.hitCd);
+    const orbSize = leg ? 14 : w.lvl >= 5 ? 13 : 10;
+    for (let i = 0; i < n; i++) {
+      const oa = w.orbAng + i * Math.PI * 2 / n;
+      const ox = u.x + Math.cos(oa) * R, oy = u.y - 4 + Math.sin(oa) * R;
+      for (const t of G.units) {
+        if (!isFoe(u, t)) continue;
+        if (dist2(ox, oy, t.x, t.y) > (orbSize + t.r) * (orbSize + t.r)) continue;
+        if (G.t < (w._orbMap.get(t) || 0)) continue;
+        w._orbMap.set(t, G.t + hitCd);
+        applyDamage(t, wpnDmg(u), u, { quiet: true });
+        /* Lv5/传说命中击退（Boss/小Boss 免疫）：椅子转出保龄球 */
+        if ((leg || w.lvl >= 5) && !t.isBoss && t.eliteTier !== 2) {
+          const ka = Math.atan2(t.y - u.y, t.x - u.x);
+          t.x = clamp(t.x + Math.cos(ka) * 16, 10, TUNE.world - 10);
+          t.y = clamp(t.y + Math.sin(ka) * 16, 10, TUNE.world - 10);
+        }
+        addParts(t.x, t.y, def.color, 2, 55, .25);
+      }
+    }
+    /* 绞肉机：周期 360° 冲击波（伤害+击退+弧光），割草清场核心 */
+    if (leg) {
+      w.novaT = (w.novaT ?? def.novaCd) - dt;
+      if (w.novaT <= 0) {
+        w.novaT = def.novaCd;
+        const nr = def.novaR * u.mods.range;
+        addFx({ type: 'slash', x: u.x, y: u.y - 4, ang: w.orbAng, arc: Math.PI * 2, r: nr, color: def.color, life: .3 });
+        for (const t of G.units) {
+          if (!isFoe(u, t) || dist2(u.x, u.y, t.x, t.y) > nr * nr) continue;
+          applyDamage(t, def.novaDmg * u.mods.dmg, u, { stun: .15 });
+          if (!t.isBoss && t.eliteTier !== 2) {
+            const ka = Math.atan2(t.y - u.y, t.x - u.x);
+            t.x = clamp(t.x + Math.cos(ka) * def.novaKb, 10, TUNE.world - 10);
+            t.y = clamp(t.y + Math.sin(ka) * def.novaKb, 10, TUNE.world - 10);
+          }
+        }
+        if (u.isPlayer || nearPlayer(u.x, u.y)) SFX.explo();
+      }
+    }
+    return;
+  }
+  /* 楼道灭火器 / 安全生产月：锥形持续喷射——按住/自动开火期间每 tickCd 结算一跳 + 减速 */
+  if (kind === 'spray' || kind === 'leg_spray') {
+    const leg = kind === 'leg_spray';
+    if (wantFire && u.stunT <= 0) {
+      w.sprayT = (w.sprayT || 0) - dt * fireRateOf(u);
+      const rng = def.range * (!leg && w.lvl >= 2 ? 1.2 : 1) * u.mods.range;
+      const half = def.half * (!leg && w.lvl >= 3 ? 1.3 : 1);
+      if (w.sprayT <= 0) {
+        w.sprayT = def.tickCd;
+        const dmg2 = wpnDmg(u);
+        for (const t of G.units) {
+          if (!isFoe(u, t)) continue;
+          if (dist2(u.x, u.y, t.x, t.y) > (rng + t.r) * (rng + t.r)) continue;
+          let da = Math.atan2(t.y - u.y, t.x - u.x) - aimA;
+          while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+          if (Math.abs(da) > half) continue;
+          applyDamage(t, dmg2, u, { quiet: true });
+          t.oaSlowT = Math.max(t.oaSlowT || 0, leg ? .7 : .45);
+        }
+        /* 泡沫粒子沿锥面喷出 */
+        for (let i = 0; i < 2; i++) {
+          const pa = aimA + rand(-half, half) * .9, pv = rand(120, 210);
+          G.parts.push({ x: u.x + Math.cos(aimA) * 8, y: u.y - 4 + Math.sin(aimA) * 8,
+            vx: Math.cos(pa) * pv, vy: Math.sin(pa) * pv,
+            color: leg ? '#ffd9e6' : '#eef4f8', size: rand(1.5, 3), t: 0, life: rng / pv });
+        }
+      }
+      /* Lv4 泡沫地面 / 传说常铺 */
+      if (leg || w.lvl >= 4) {
+        w.foamT = (w.foamT || 0) - dt;
+        if (w.foamT <= 0) {
+          w.foamT = .5;
+          const fd = rng * rand(.4, .8);
+          G.burns.push({ x: u.x + Math.cos(aimA) * fd, y: u.y + Math.sin(aimA) * fd,
+            r: 26, dps: 0, slow: .4, life: 2.5, t: 0, owner: u, color: '#dfe9f2' });
+        }
+      }
+      /* Lv5 过热爆发：持续喷 2.5s 自动在锥心炸一次 */
+      if (!leg && w.lvl >= 5) {
+        w.heatT = (w.heatT || 0) + dt;
+        if (w.heatT >= 2.5) {
+          w.heatT = 0;
+          explodeAtNoRecurse(u.x + Math.cos(aimA) * rng * .6, u.y + Math.sin(aimA) * rng * .6,
+            52, wpnDmg(u) * 6, u, '#ff5f5f');
+        }
+      }
+      /* 传说：订书钉穿透齐射 */
+      if (leg) {
+        w.stapleT = (w.stapleT || 0) - dt * fireRateOf(u);
+        if (w.stapleT <= 0) {
+          w.stapleT = def.stapleCd;
+          spawnBullet(u, aimA + rand(-.05, .05), { shape: 'streak', r: 2.5, range: rng * 1.6,
+            dmg: def.stapleDmg * u.mods.dmg, spd: 420, pierce: def.staplePierce, color: '#e8b23d' });
+        }
+      }
+      if (u.isPlayer && Math.random() < dt * 1.5) SFX.shoot();
+    } else { w.heatT = 0; }
+    return;
+  }
+
   if (!wantFire || w.cd > 0) return;
   w.cd = def.cd;
   const dmg = wpnDmg(u);
@@ -1328,8 +1447,71 @@ function updateWeapon(u, dt, wantFire, aimA) {
         zap: { cd: def.zapCd, dmg: def.zapDmg * u.mods.dmg, chains: def.chains }, stun: .2,
         absorb: def.absorbR ? { r: def.absorbR, dmg: def.absorbDmg, count: 0 } : null });
       break;
+    /* v2.9 机械键盘：弧形横扫近战。自动开火只在有人进刀圈才挥（手动点击不受限） */
+    case 'swing': {
+      const reach = (def.reach + (w.lvl >= 4 ? 16 : 0)) * u.mods.range;
+      const arc = def.arc * (w.lvl >= 2 ? 1.3 : 1);
+      const manual = u.isPlayer && !touch.using && mouse.down;
+      if (!manual && !nearestUnit(u.x, u.y, reach + 14, o => isFoe(u, o))) { w.cd = .12; break; }
+      w.swingN = (w.swingN || 0) + 1;
+      const whirl = w.lvl >= 5 && w.swingN % 3 === 0;   // Ctrl+A 全选旋风
+      const kb = def.kb * (w.lvl >= 4 ? 1.4 : 1);
+      const doSlash = (ang, arcW, mult) => {
+        addFx({ type: 'slash', x: u.x, y: u.y - 4, ang, arc: arcW, r: reach, color: def.color, life: .22 });
+        let hits = 0;
+        for (const t of G.units) {
+          if (!isFoe(u, t)) continue;
+          if (dist2(u.x, u.y, t.x, t.y) > (reach + t.r) * (reach + t.r)) continue;
+          if (arcW < Math.PI * 2) {
+            let da = Math.atan2(t.y - u.y, t.x - u.x) - ang;
+            while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+            if (Math.abs(da) > arcW / 2 + .15) continue;
+          }
+          applyDamage(t, dmg * mult, u, { stun: .12 });
+          hits++;
+          if (!t.isBoss && t.eliteTier !== 2) {
+            const ka = Math.atan2(t.y - u.y, t.x - u.x);
+            t.x = clamp(t.x + Math.cos(ka) * kb, 10, TUNE.world - 10);
+            t.y = clamp(t.y + Math.sin(ka) * kb, 10, TUNE.world - 10);
+          }
+        }
+        /* 键盘劈家具：近战顺手拆掩体（50% 系数），玩家专属 */
+        if (u.isPlayer) {
+          for (const arr2 of [G.obstacles, G.decor]) {
+            for (const o of arr2) {
+              if (o.destroyed || o.cover === 'T3' || o.indestructible) continue;
+              if (dist2(u.x, u.y, o.x + o.w / 2, o.y + o.h / 2) > (reach + 20) * (reach + 20)) continue;
+              o.hp -= dmg * mult * .5;
+              if (o.hp <= 0 && !o.destroyed) { o.destroyed = true; o.destroyedT = DESTROY_FADE_T; onObstacleDestroyed(o); }
+            }
+          }
+        }
+        return hits;
+      };
+      const n = whirl ? doSlash(aimA, Math.PI * 2, 1.35) : doSlash(aimA, arc, 1);
+      /* Lv3 回车键补刀：背后反向半弧 50% 伤 */
+      if (!whirl && w.lvl >= 3) delay(() => { if (u.alive) doSlash(aimA + Math.PI, arc * .7, .5); }, .14);
+      if (u.isPlayer) {
+        if (n >= 5) addFloat(u.x, u.y - 24, whirl ? '⌨️ Ctrl+A 全选！' : '⌨️ 全键无冲！', '#9fb3d1', 9, 1);
+        if (n > 0) SFX.obstacleHit();
+      }
+      break;
+    }
+    /* v2.9 订书机：高频短刺穿透 */
+    case 'stab': {
+      if (w.lvl >= 2) w.cd = def.cd * .86;
+      w.stabN = (w.stabN || 0) + 1;
+      const rng = def.range * (w.lvl >= 3 ? 1.15 : 1);
+      const pierce = def.pierce + (w.lvl >= 3 ? 2 : 0);
+      const big = w.lvl >= 5 && w.stabN % 5 === 0;
+      spawnBullet(u, aimA, { shape: 'streak', r: big ? 3.5 : 2, range: rng, pierce,
+        dmg: dmg * (big ? 3 : 1), stun: big ? .2 : 0 });
+      if (w.lvl >= 4) for (const s of [-1, 1])
+        spawnBullet(u, aimA + s * .1, { shape: 'streak', r: 2, range: rng, pierce, dmg: dmg * .6 });
+      break;
+    }
   }
-  if (u.isPlayer && !['sniper', 'chain'].includes(kind)) {
+  if (u.isPlayer && !['sniper', 'chain', 'swing'].includes(kind)) {
     SFX.shoot();
     /* 枪口火焰帧动画（素材缺失时 render 静默跳过） */
     addFx({ type: 'muzzle', x: u.x + Math.cos(aimA) * 9, y: u.y - 4 + Math.sin(aimA) * 9, ang: aimA, r: 10, life: .14 });
@@ -1421,7 +1603,7 @@ function fireProcs(source, hook, ctx) {
 function explodeAtNoRecurse(x, y, r, dmg, owner, color) {
   addFx({ type: 'boom', x, y, r, color: color || '#ff9440', life: .35 });
   addParts(x, y, color || '#ff9440', 14, 90, .5);
-  addShake(3);
+  addShake(3, x, y);
   for (const t of G.units) {
     if (!isFoe(owner, t)) continue;
     if (dist2(x, y, t.x, t.y) < (r + t.r) * (r + t.r)) applyDamage(t, dmg, owner, { fromProc: true });
@@ -1453,7 +1635,7 @@ function addBattleDecal(x, y, i) {
 function explodeAt(x, y, r, dmg, owner, color, burn) {
   addFx({ type: 'boom', x, y, r, color: color || '#ff9440', life: .35 });
   addParts(x, y, color || '#ff9440', 14, 90, .5);
-  addShake(3);
+  addShake(3, x, y);
   addBattleDecal(x, y, r >= 40 ? 9 : 10);   // v2.7 战场记忆：爆炸留焦痕（大爆大痕）
   for (const t of G.units) {
     if (!isFoe(owner, t)) continue;
@@ -1557,7 +1739,7 @@ function triggerSeveranceNuke(owner, x = owner.x, y = owner.y, waves = 1) {
   for (let i = 0; i < Math.min(3, 1 + waves); i++) spawnOpcSummon(owner, 'contractor', { life: 10 + i });
   addFx({ type: 'nukefx', x, y, r: 60, life: 1 });
   addFloat(owner.x, owner.y - 30, owner.mods.__evoLayoffWave ? '离职潮协议！' : '退休金核爆！', '#9ad1ff', 10, 1.3);
-  addShake(5); SFX.boss();
+  addShake(5, x, y); if (nearPlayer(x, y)) SFX.boss();
 }
 
 /* ---------- 伤害 / 诅咒 / 击杀 ---------- */
@@ -2740,8 +2922,8 @@ function updatePersonaSkills(u, dt) {
       u.buffs.dmgM = Math.max(u.buffs.dmgM, 1.3);
       addFx({ type: 'nukefx', x: u.x, y: u.y - 8, r: 60, life: .8 });
       addFloat(u.x, u.y - 28, `📊 年终述职：全场 ${hit} 人被迫听完`, '#ffcf33', 11, 1.6);
-      cam.shake = Math.max(cam.shake, 5);
-      SFX.explo();
+      addShake(5, u.x, u.y);
+      if (nearPlayer(u.x, u.y)) SFX.explo();
     }
   }
   u.overworkCd = Math.max(0, (u.overworkCd || 0) - dt);
@@ -2757,7 +2939,7 @@ function updatePersonaSkills(u, dt) {
     }
     addFx({ type: 'nukefx', x: u.x, y: u.y, r: 62, life: 1 });
     addFloat(u.x, u.y - 28, '996核爆协议！', '#ff6a6a', 11, 1.4);
-    addShake(6); SFX.boss();
+    addShake(6, u.x, u.y); if (nearPlayer(u.x, u.y)) SFX.boss();
   }
   if (u.mods.fakeDiligence && u.fdIdleT >= (u.mods.__evoFakeDiligenceUpgrade ? 5 : 8)) {
     u.fdIdleT = 0;
@@ -2767,7 +2949,7 @@ function updatePersonaSkills(u, dt) {
       const perFoe = Math.min(wpnDmg(u) * 3, totalBurst / foes.length);
       for (const t of foes) applyDamage(t, perFoe, u, { quiet: false });
     }
-    addFloat(u.x, u.y - 22, '业绩展示！', '#b665ff', 9, 1.2); addShake(3); SFX.fuse();
+    addFloat(u.x, u.y - 22, '业绩展示！', '#b665ff', 9, 1.2); addShake(3, u.x, u.y); if (nearPlayer(u.x, u.y)) SFX.fuse();
     if (u.mods.__evoFakeDiligenceUpgrade) { u.ignoreDmgT = 2; addFloat(u.x, u.y - 32, '已读不回状态', '#c9d4e4', 8, 1); }
   }
   /* 季度考核倒计时：场上每个受控敌人给自身一层KPI压力，每秒重算一次（不做同帧刷层） */
@@ -2821,7 +3003,7 @@ function updatePersonaSkills(u, dt) {
         for (const t of G.units) if (isFoe(u, t) && dist2(u.x, u.y, t.x, t.y) < 260 * 260)
           applyDamage(t, t.isBoss || t.eliteTier === 2 ? Math.min(dmg, 300) : dmg, u, { quiet: false });
         addFx({ type: 'nukefx', x: u.x, y: u.y, r: 70, life: 1 });
-        addFloat(u.x, u.y - 24, '全员大会核爆！', '#ff6a6a', 10, 1.4); addShake(6); SFX.boss();
+        addFloat(u.x, u.y - 24, '全员大会核爆！', '#ff6a6a', 10, 1.4); addShake(6, u.x, u.y); if (nearPlayer(u.x, u.y)) SFX.boss();
       }
     } else if (u.meetingPoints >= 30) {
       u.meetingPoints = 0;
@@ -2997,7 +3179,7 @@ function doClear(u, radius = 95, dmg = 30) {
       t.x += Math.cos(a) * 40; t.y += Math.sin(a) * 40;
     }
   }
-  addShake(5);
+  addShake(5, u.x, u.y);
   if (u.isPlayer || nearPlayer(u.x, u.y)) SFX.explo();
   if (u.isPlayer) addFloat(u.x, u.y - 20, `/clear 已清除 ${n} 发子弹`, '#ffffff', 8, 1);
 }
@@ -3243,21 +3425,23 @@ export function update(dt) {
   /* v2.2 正赛"琐事骚扰潮"：转正后周期性小撮杂鱼（含新行为怪）从圈内一角涌来，
    * 维持割草密度与怪物多样性——免试用期玩家也能见到全部怪物品类 */
   if (!tr.active && G.player.alive) {
-    G.mobTrickleT = (G.mobTrickleT ?? 14) - dt;
+    G.mobTrickleT = (G.mobTrickleT ?? 8) - dt;
     if (G.mobTrickleT <= 0) {
-      G.mobTrickleT = G.zone.phase >= 3 ? 34 : 22;
+      /* v2.9 割草密度救活：22s/3-6只/cap14 → 9s/8-14只/cap36——
+       * 割草游戏的核心循环原来在转正后直接消失，正赛屏幕上永远只有零星几只 */
+      G.mobTrickleT = G.zone.phase >= 3 ? 16 : 9;
       const wild = G.units.filter(u => u.alive && u.isMob && !u.publicIncident).length;
-      const cap = G.zone.phase >= 3 ? 6 : 14;
+      const cap = G.zone.phase >= 3 ? 16 : 36;
       if (wild < cap) {
-        const n = randi(3, 6), a0 = rand(0, Math.PI * 2);
+        const n = Math.min(cap - wild, randi(8, 14)), a0 = rand(0, Math.PI * 2);
         const month = Math.min(5, 3 + G.zone.phase);
         for (let i = 0; i < n; i++) {
-          const a = a0 + rand(-.6, .6), rr = rand(300, 400);
+          const a = a0 + rand(-.9, .9), rr = rand(280, 420);
           spawnMob(pick(BR_MOB_POOL),
             clamp(G.player.x + Math.cos(a) * rr, 30, TUNE.world - 30),
             clamp(G.player.y + Math.sin(a) * rr, 30, TUNE.world - 30), false, month);
         }
-        addFeed('一批琐事找上门来', false);
+        if (Math.random() < .35) addFeed('一批琐事找上门来', false);
       }
     }
   }
@@ -3527,7 +3711,7 @@ export function update(dt) {
           }
         }
       }, .8);
-      addShake(3);
+      addShake(3, dx, dy);
       addFeed(`📦 快递空投在 (${Math.round(dx)}, ${Math.round(dy)}) 落地（40 半径 25 伤）`, true);
       warn('📦 有物资空投！小心砸中');
       markEventTriggered('delivery');
@@ -4164,12 +4348,30 @@ function updateUnit(u, dt) {
   if (u.curses.repeat > 0) aimA = u.repeatAim;
   moveWithCollide(u, mvx, mvy, dt);
   updateWeapon(u, dt, wantFire, aimA);
-  /* v2.3 双持：副手武器与主武器同角度同时开火（55% 伤害，见 wpnDmg 的 _offhand） */
+  /* v2.3 双持：副手武器与主武器同角度同时开火（70% 伤害，见 wpnDmg 的 _offhand） */
   if (u.isPlayer && u.weapon2) {
     const main = u.weapon;
     u.weapon = u.weapon2; u._offhand = true;
     updateWeapon(u, dt, wantFire, aimA);
     u.weapon = main; u._offhand = false;
+  }
+  /* v2.9 三/四号位：独立自瞄最近敌人（随身炮台，50% 伤害），与主武器瞄准完全解耦 */
+  if (u.isPlayer) {
+    for (const [slot, flag] of [[u.weapon3, '_offhand3'], [u.weapon4, '_offhand4']]) {
+      if (!slot) continue;
+      const main = u.weapon;
+      u.weapon = slot; u[flag] = true;
+      const d3 = wdef(u);
+      const t3 = nearestUnit(u.x, u.y, Math.max(200, (d3.range || 220) * 1.15), o => isFoe(u, o));
+      let a3 = aimA, f3 = false;
+      if (t3) {
+        a3 = leadAim(u.x, u.y, t3, d3.spd || 0);
+        f3 = d3.kind === 'charge' ? u.weapon.charge < chargeCapOf(u, d3) - .01 : true;
+      } else f3 = d3.kind === 'charge' && u.weapon.charging;
+      if (u.hiddenT > 0) f3 = d3.kind === 'charge' ? u.weapon.charging : false;   // 隐身纪律同样约束
+      updateWeapon(u, dt, f3, a3);
+      u.weapon = main; u[flag] = false;
+    }
   }
 }
 
@@ -6653,7 +6855,7 @@ function spawnElite(type, near, hpMult = 1) {
     /* v2.8 登场亮相：1s 定格（无敌不动作）+ 开场台词 + 轻震 */
     u.introT = 1;
     u.invulnT = Math.max(u.invulnT, 1);
-    addShake(2);
+    addShake(2, u.x, u.y);
     delay(() => { if (u.alive) bossQuip(u, 'intro'); }, .35);
   }
   else addFeed(e.intro, false);
@@ -6926,7 +7128,7 @@ function updateElite(u, dt) {
     u.spdBase *= 1.15;
     bossQuip(u, 'rage');
     addFx({ type: 'bossroarfx', x: u.x, y: u.y - 8, r: 30, life: .7 });
-    addShake(5);
+    addShake(5, u.x, u.y);
     for (const t of G.units) {
       if (!isFoe(u, t) || dist2(u.x, u.y, t.x, t.y) > 80 * 80) continue;
       const a = Math.atan2(t.y - u.y, t.x - u.x);
@@ -7448,13 +7650,31 @@ function updatePickups(dt) {
             gainXp(u, 15);
             addFloat(u.x, u.y - 18, '重复芯片 → +15 经验', '#9aa4b5', 7, .8);
           }
-        } else if (u.weapon2Unlocked && !u.weapon2 && p.id !== u.weapon.id) {
-          /* v2.3 双持已解锁且副手空：异款芯片自动装入副手 */
+        } else if (u.weapon3 && !u.weapon3.leg && p.id === u.weapon3.id) {
+          /* v2.9 三号位同款芯片：升级三号位 */
           p.dead = true;
-          u.weapon2 = { id: p.id, lvl: p.lvl, leg: null, cd: 0, charge: 0, charging: false, pillarT: 3, droneAng: rand(0, 6), droneCds: [0, 0, 0, 0] };
-          addFloat(u.x, u.y - 20, `🗡 副手武器上岗：${WEAPONS[p.id].name} Lv.${p.lvl}`, '#7ac8ff', 9, 1.2);
-          SFX.swap();
+          if (u.weapon3.lvl < 5) {
+            u.weapon3.lvl++;
+            addFloat(u.x, u.y - 18, `📎 三号位 ${WEAPONS[p.id].name} → Lv.${u.weapon3.lvl}`, '#7ac8ff', 8, 1);
+            SFX.chip();
+          } else {
+            gainXp(u, 15);
+            addFloat(u.x, u.y - 18, '重复芯片 → +15 经验', '#9aa4b5', 7, .8);
+          }
+        } else if (u.weapon4 && !u.weapon4.leg && p.id === u.weapon4.id) {
+          /* v2.9.2 四号位同款芯片：升级四号位 */
+          p.dead = true;
+          if (u.weapon4.lvl < 5) {
+            u.weapon4.lvl++;
+            addFloat(u.x, u.y - 18, `📎 四号位 ${WEAPONS[p.id].name} → Lv.${u.weapon4.lvl}`, '#7ac8ff', 8, 1);
+            SFX.chip();
+          } else {
+            gainXp(u, 15);
+            addFloat(u.x, u.y - 18, '重复芯片 → +15 经验', '#9aa4b5', 7, .8);
+          }
         }
+        /* v2.9.2 槽位只从升职抽卡来（宽 vs 深的博弈）——地面异款芯片不自动开槽，
+         * 只保留：同款升对应槽（上面四个分支）/ 主武器悬停换枪（下方 hoverChip） */
       } else {
         botChip(u, p);
       }
@@ -7466,7 +7686,8 @@ function updatePickups(dt) {
       if (p.dead || p.type !== 'chip') continue;
       if (p.id === pl.weapon.id && !pl.weapon.leg) continue;
       if (pl.weapon2 && p.id === pl.weapon2.id && !pl.weapon2.leg) continue;   // 副手同款自动吸收，不进换枪悬停
-      if (pl.weapon2Unlocked && !pl.weapon2) continue;                          // 副手空位时异款自动装备
+      if (pl.weapon3 && p.id === pl.weapon3.id && !pl.weapon3.leg) continue;   // v2.9 三号位同款同理
+      if (pl.weapon4 && p.id === pl.weapon4.id && !pl.weapon4.leg) continue;   // v2.9.2 四号位同款同理
       const d2 = dist2(p.x, p.y, pl.x, pl.y);
       if (d2 < hoverBest) { hoverBest = d2; G.hoverChip = p; }
     }
@@ -7730,20 +7951,37 @@ function buildDraftPool(pl) {
       cards.push({ kind: 'active', id, name: `${label}：${def.name}`, eff: def.eff[0], tag: def.tag, persona: def.persona || null, w: .7 * personaBonus });
     }
   }
-  /* v2.3 主武器进卡池：同款芯片速递（主/副手 +1 级）+ 双持工牌（解锁第二主武器槽） */
-  if (!pl.weapon.leg && pl.weapon.lvl < 5) {
-    cards.push({ kind: 'chipup', id: 'chipup_main', name: `同款芯片速递：${WEAPONS[pl.weapon.id].name}`,
-      eff: `主武器 Lv.${pl.weapon.lvl} → Lv.${pl.weapon.lvl + 1}${pl.weapon.lvl + 1 >= 5 ? '（满级，可找搭档芯片融合）' : ''}`,
-      tag: '行政把芯片直接送到工位，不用满地捡了。', w: .9 });
-  } else if (pl.weapon2 && !pl.weapon2.leg && pl.weapon2.lvl < 5) {
-    cards.push({ kind: 'chipup', id: 'chipup_off', name: `同款芯片速递：${WEAPONS[pl.weapon2.id].name}（副手）`,
-      eff: `副手武器 Lv.${pl.weapon2.lvl} → Lv.${pl.weapon2.lvl + 1}`,
-      tag: '副手也是手，行政一并配齐。', w: .9 });
+  /* v2.9.2 武器卡（VS 模式）：选已有武器=升一级，选新武器=装进下一个空槽（上限 4 把，无等级门槛）。
+   * 每次抽卡都可能同时见到"升级已有"和"新枪上岗"两张——宽 vs 深当场对垒 */
+  const SLOT_META = [
+    ['weapon', '主武器', '100% 伤害'],
+    ['weapon2', '副手', '70% 伤害，与主武器同向齐射'],
+    ['weapon3', '三号位', '50% 伤害，独立自动索敌'],
+    ['weapon4', '四号位', '50% 伤害，独立自动索敌'],
+  ];
+  /* ① 升级已有武器：从可升级的槽里随机挑一把出卡 */
+  const upgradable = SLOT_META.filter(([k]) => pl[k] && !pl[k].leg && pl[k].lvl < 5);
+  if (upgradable.length) {
+    const [slotKey, slotName] = pick(upgradable);
+    const w2 = pl[slotKey];
+    cards.push({ kind: 'wpn_up', id: 'wu_' + slotKey, slotKey,
+      name: `武器升级：${WEAPONS[w2.id].name}`,
+      eff: `${slotName} Lv.${w2.lvl} → Lv.${w2.lvl + 1}${w2.lvl + 1 >= 5 ? (slotKey === 'weapon' ? '（满级，可找搭档芯片融合）' : '（满级）') : ''}`,
+      tag: '行政把芯片直接送到工位，不用满地捡了。', w: 1.5 });
   }
-  if (!pl.weapon2Unlocked && pl.level >= 6) {
-    cards.push({ kind: 'dual', id: 'dual_license', name: '🗡 双持工牌：第二主武器槽',
-      eff: '解锁副手武器槽——拾取另一款芯片自动装备，与主武器同时开火（副手 55% 伤害，同款芯片可继续升它）',
-      tag: '一个人干两个人的活，工资还是一份。', w: 1.15 });
+  /* ② 新武器上岗：还有空槽就随机滚一把没持有的（每次升级重掷） */
+  const emptySlot = SLOT_META.find(([k]) => !pl[k]);
+  if (emptySlot) {
+    const heldIds = SLOT_META.map(([k]) => pl[k] && pl[k].id).filter(Boolean);
+    const rollPool = Object.keys(WEAPONS).filter(id => !heldIds.includes(id));
+    if (rollPool.length) {
+      const wid = pick(rollPool);
+      const [slotKey, slotName, slotDesc] = emptySlot;
+      cards.push({ kind: 'wpn_new', id: 'wn_' + wid, wid, slotKey,
+        name: `🔫 新武器上岗：${WEAPONS[wid].name}`,
+        eff: `装进${slotName}（${slotDesc}）· ${WEAPONS[wid].pat}`,
+        tag: '多把武器多条活路。这把不满意？下次升职再摇一把。', w: 2.2 });
+    }
   }
   return cards;
 }
@@ -7791,6 +8029,23 @@ function openLevelup() {
       let replaceIdx = picked.findIndex(c => !c.persona && c.kind === 'skill' && !c._pity);
       if (replaceIdx < 0 && !picked[picked.length - 1]._pity) replaceIdx = picked.length - 1;
       if (replaceIdx >= 0) picked[replaceIdx] = cards.splice(bestIdx, 1)[0];
+    }
+  }
+  /* v2.9.2 武器卡保底：宽（多枪）vs 深（单枪到顶）是核心博弈，不能沦为彩票——
+   * 有资格出现却连续 2 次没上桌就强制顶替一张通用技能卡（拿不拿仍由玩家定） */
+  {
+    const isWC = c => c.kind === 'wpn_new' || c.kind === 'wpn_up';
+    if (picked.some(isWC)) G.wcDry = 0;
+    else {
+      const wcIdx = cards.findIndex(isWC);
+      if (wcIdx >= 0) {
+        G.wcDry = (G.wcDry || 0) + 1;
+        if (G.wcDry >= 2) {
+          let ri = picked.findIndex(c => c.kind === 'skill' && !c._pity && c.persona !== pl.persona);
+          if (ri < 0) ri = picked.findIndex(c => !c._pity && c.persona !== pl.persona);
+          if (ri >= 0) { picked[ri] = cards.splice(wcIdx, 1)[0]; G.wcDry = 0; }
+        }
+      }
     }
   }
   while (picked.length < 3) picked.push({ kind: 'skill', id: '_coffee' + picked.length, name: '茶水间补给', eff: '回复 50 HP，获得 15 护盾',
@@ -7851,19 +8106,20 @@ export function pickLevelChoice(i) {
     warn(`🎭 人设锁定：${label}——之后的卡池只出同人设卡`);
     addFloat(pl.x, pl.y - 32, `人设：${label}`, '#ffcf33', 10, 1.6);
   }
-  if (s.kind === 'chipup') {
-    /* v2.3 同款芯片速递：主/副手武器 +1 级 */
-    const w = s.id === 'chipup_off' ? pl.weapon2 : pl.weapon;
+  if (s.kind === 'wpn_up') {
+    /* v2.9.2 武器升级卡：卡面指定槽 +1 级 */
+    const w = pl[s.slotKey];
     if (w && !w.leg && w.lvl < 5) {
       w.lvl++;
       addFloat(pl.x, pl.y - 22, `${WEAPONS[w.id].name} → Lv.${w.lvl}${w.lvl === 5 ? '（满级！）' : ''}`, '#ffcf33', 9, 1.1);
       SFX.chip();
     }
-  } else if (s.kind === 'dual') {
-    /* v2.3 双持工牌：解锁副手武器槽 */
-    pl.weapon2Unlocked = true;
-    warn('🗡 双持解锁：捡起另一款芯片会自动装进副手槽，与主武器同时开火');
-    addFloat(pl.x, pl.y - 24, '双持工牌到手！', '#7ac8ff', 10, 1.4);
+  } else if (s.kind === 'wpn_new') {
+    /* v2.9.2 新武器上岗：装进卡面指定的空槽（副手随主枪开火 / 三四号位独立自瞄） */
+    pl[s.slotKey] = { id: s.wid, lvl: 1, leg: null, cd: 0, charge: 0, charging: false, pillarT: 3, droneAng: rand(0, 6), droneCds: [0, 0, 0, 0] };
+    if (s.slotKey === 'weapon2') pl.weapon2Unlocked = true;
+    warn(`🔫 新武器上岗：${WEAPONS[s.wid].name}（${s.slotKey === 'weapon2' ? '与主武器同时开火' : '独立自动索敌'}）`);
+    addFloat(pl.x, pl.y - 24, `🔫 ${WEAPONS[s.wid].name}`, '#7ac8ff', 10, 1.4);
   } else if (s.kind === 'sub') {
     if (pl.subs[s.id]) pl.subs[s.id].lv++;
     else pl.subs[s.id] = { lv: 1, t: 0, ang: rand(0, 6) };
