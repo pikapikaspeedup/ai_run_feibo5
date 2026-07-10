@@ -213,6 +213,12 @@ const ONESHOT_FX = {
   offerfx: ['fx_offer', 2.6, .7],       // 编制降临金光柱
   avalanchefx: ['fx_avalanche', 2.4, .6], // 文档塔雪崩
   paperburstfx: ['fx_paperburst', 2.6, .6], // 纸屑清屏雨(复印机)
+  /* v3.1 玄学科/风暴科武器演出 */
+  karmafx: ['fx_karma', 2.2, .5],       // 电子木鱼功德冲击环
+  stampfx: ['fx_stamp', 2.4, .6],       // 「驳回」红章砸落
+  slamfx: ['fx_slam', 2.4, .6],         // 领导拍板巨掌
+  acdripfx: ['fx_acdrip', 2.2, .6],     // 空调漏水滴落
+  vortexfx: ['fx_vortex', 1.6, .5],     // 强制拉会漩涡（1.6：2.4 时 300px 紫风车盖半屏太抢戏）
 };
 /* 地面贴花（decal_f0..8：咖啡渍/文件/线缆等，切自 decal_sheet） */
 const DECAL_IMGS = [];
@@ -254,6 +260,15 @@ for (const [path, src] of Object.entries(_statusGlob)) {
   img.src = src;
 }
 /* 武器芯片专属图标（chip_<id>.png）——原来所有芯片同一张图，只靠名字颜色区分，识别度极差 */
+/* v3.2 通用小道具贴图（prop_<key>.png：todo 坑/木鱼等） */
+const PROP_IMGS = {};
+const _propGlob = import.meta.glob('../assets/generated/prop_*.png', { eager: true, import: 'default' });
+for (const [path, src] of Object.entries(_propGlob)) {
+  const key = path.split('/').pop().replace('.png', '').replace(/^prop_/, '');
+  const img = new Image();
+  img.onload = () => { PROP_IMGS[key] = img; };
+  img.src = src;
+}
 const CHIP_ICONS = {};
 const _chipGlob = import.meta.glob('../assets/generated/chip_*.png', { eager: true, import: 'default' });
 for (const [path, src] of Object.entries(_chipGlob)) {
@@ -451,6 +466,30 @@ export function render(ctx) {
 
   /* 燃烧区（v2.7：带 spr 的用帧动画贴图循环——文心燃烧大饼等） */
   for (const b of G.burns) {
+    if (b.noDraw) continue;   // v3.2b 纯逻辑力场（引力井等）：范围由特效本体表达，不画兜底圆盘
+    /* v3.2b 火线需求/项目火葬场火墙段：单张燃烧便签（火苗永远朝上，一段一张排成火线——
+     * 原素材是"三张一排"整图，每段重复画整排 = 复制粘贴火箱子灾难，已废弃 fx_firewall） */
+    if (b.fireWall) {
+      const ff = fxLoop('fx_firenote', G.t * 9 + b.x * .11);
+      if (ff) {
+        ctx.globalAlpha = .96;
+        const s2 = b.r * 2.3;
+        ctx.drawImage(ff, b.x - s2 / 2, b.y - s2 * .72, s2, s2);
+        ctx.globalAlpha = 1;
+        continue;
+      }
+    }
+    /* v3.2 历史遗留问题/击鼓传锅地雷：//TODO 坑贴图（未武装半透明） */
+    if (b.mineDmg !== undefined) {
+      const pit = PROP_IMGS.todo_pit;
+      if (pit) {
+        ctx.globalAlpha = b.mineArmed ? .95 : .45;
+        const s2 = b.r * 2.6;
+        ctx.drawImage(pit, b.x - s2 / 2, b.y - s2 / 2, s2, s2);
+        ctx.globalAlpha = 1;
+        continue;
+      }
+    }
     const bf = b.spr && fxLoop(b.spr, G.t * 8 + b.x * .05);
     if (bf) {
       ctx.globalAlpha = .85;
@@ -547,9 +586,11 @@ export function render(ctx) {
         ctx.fillStyle = '#ffcf33'; ctx.fillText(nm, p.x - nm.length * 3.5, p.y + 14 + by);
       }
     } else if (p.type === 'heal') {
-      /* 咖啡豆：小绿点 */
-      ctx.fillStyle = '#14161d'; ctx.fillRect(Math.round(p.x - 2), Math.round(p.y - 2 + by), 5, 5);
-      ctx.fillStyle = '#7ee08a'; ctx.fillRect(Math.round(p.x - 1), Math.round(p.y - 1 + by), 3, 3);
+      /* v3.0 咖啡豆改绿十字：一眼读出"这是回血"（原 3px 绿点没人认识） */
+      const hx = Math.round(p.x), hy = Math.round(p.y + by);
+      ctx.fillStyle = '#14161d'; ctx.fillRect(hx - 3, hy - 1, 7, 3); ctx.fillRect(hx - 1, hy - 3, 3, 7);
+      ctx.fillStyle = '#7ee08a'; ctx.fillRect(hx - 2, hy, 5, 1); ctx.fillRect(hx, hy - 2, 1, 5);
+      ctx.fillStyle = '#c9f2d4'; ctx.fillRect(hx, hy, 1, 1);
     } else if (p.type === 'item') {
       const c = CONSUMABLES[p.id];
       const icon = ITEM_ICONS[p.id];
@@ -560,7 +601,16 @@ export function render(ctx) {
         ctx.drawImage(hifiSwap || SPR[c.spr], Math.round(p.x - 5), Math.round(p.y - 6 + by));
       }
     } else {
-      ctx.drawImage(SPR.xp, Math.round(p.x - 3), Math.round(p.y - 3 + by));
+      /* v3.0 经验豆分级：大豆更大更亮（VS 宝石语义——一眼看出哪颗值钱） */
+      const amt = p.amt || 1;
+      const s = amt >= 25 ? 13 : amt >= 8 ? 10 : 7;
+      if (amt >= 25) {
+        ctx.globalAlpha = .45 + .25 * Math.sin(G.t * 6 + p.x);
+        ctx.strokeStyle = '#ffe27a';
+        ctx.beginPath(); ctx.arc(p.x, p.y + by, 8, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      ctx.drawImage(SPR.xp, Math.round(p.x - s / 2), Math.round(p.y - s / 2 + by), s, s);
     }
   }
 
@@ -1111,6 +1161,61 @@ function drawUnit(ctx, G, u) {
     ctx.fillText('约谈中', x, y - 37);
     ctx.textAlign = 'left';
   }
+  /* v3.1 恶臭光环可视化：韭菜盒子/生化事故——绿色波纹圈 + 飘散臭气粒子 */
+  if (u.alive) {
+    for (const slot of [u.weapon, u.weapon2, u.weapon3, u.weapon4]) {
+      if (!slot) continue;
+      const sd = slot.leg ? LEGENDS[slot.leg] : WEAPONS[slot.id];
+      if (!sd || (sd.kind !== 'aura' && sd.kind !== 'leg_bio') || !slot._auraR) continue;
+      const R = slot._auraR;
+      /* v3.2 臭气波纹帧动画叠加（fx_stink 3x3 切片），程序化波纹圈保底 */
+      const sf = fxLoop('fx_stink', G.t * 6 + u.x * .03);
+      if (sf) {
+        ctx.globalAlpha = .5;
+        ctx.drawImage(sf, x - R, y - 4 - R, R * 2, R * 2);
+        ctx.globalAlpha = 1;
+      }
+      ctx.save();
+      ctx.globalAlpha = .28 + .08 * Math.sin(G.t * 3);
+      ctx.strokeStyle = '#8fe08a'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= 26; i++) {
+        const a = i / 26 * Math.PI * 2;
+        const rr = R + Math.sin(a * 5 + G.t * 4) * 3;
+        const px2 = x + Math.cos(a) * rr, py2 = y - 4 + Math.sin(a) * rr;
+        i ? ctx.lineTo(px2, py2) : ctx.moveTo(px2, py2);
+      }
+      ctx.closePath(); ctx.stroke();
+      ctx.globalAlpha = .18;
+      ctx.fillStyle = '#8fe08a';
+      ctx.fill();
+      ctx.restore();
+      if (Math.random() < .15) {
+        G.parts.push({ x: x + rand(-R * .7, R * .7), y: y - 4 + rand(-R * .7, R * .7),
+          vx: rand(-6, 6), vy: rand(-22, -10), color: '#8fe08a', size: 2, t: 0, life: rand(.5, .9) });
+      }
+    }
+  }
+  /* v3.2 电子木鱼悬浮可视化：金色木鱼绕主人头侧上下漂浮，敲击节奏微缩放 */
+  if (u.alive) {
+    for (const slot of [u.weapon, u.weapon2, u.weapon3, u.weapon4]) {
+      if (!slot) continue;
+      const sd = slot.leg ? LEGENDS[slot.leg] : WEAPONS[slot.id];
+      if (!sd || (sd.kind !== 'karma' && sd.kind !== 'leg_karma')) continue;
+      const wf = PROP_IMGS.wooden_fish;
+      const bobY = Math.sin(G.t * 3) * 2.5;
+      const pulse = 1 + Math.max(0, Math.sin(G.t / (sd.tapCd || .5) * Math.PI * 2)) * .12;
+      if (wf) {
+        const s = 13 * pulse;
+        ctx.drawImage(wf, x + 9 - s / 2, y - 20 + bobY - s / 2, s, s);
+      } else {
+        ctx.fillStyle = '#e8c96a';
+        ctx.beginPath(); ctx.arc(x + 9, y - 20 + bobY, 4 * pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#8a6a2a'; ctx.fillRect(x + 7, y - 19 + bobY, 4, 1);
+      }
+      break;
+    }
+  }
   /* v2.9 环绕近战可视化：人体工学椅 / 工位绞肉机键盘刀（任意武器槽持有都画） */
   if (u.alive) {
     for (const slot of [u.weapon, u.weapon2, u.weapon3, u.weapon4]) {
@@ -1123,6 +1228,13 @@ function drawUnit(ctx, G, u) {
       for (let i = 0; i < n; i++) {
         const oa = (slot.orbAng || 0) + i * Math.PI * 2 / n;
         const ox = x + Math.cos(oa) * R, oy = y - 4 + Math.sin(oa) * R;
+        /* v3.2 素材帧优先：orbit_chair / orbit_blade 9 帧自旋序列（帧序即旋转，无需 ctx.rotate） */
+        const of2 = fxLoop(leg ? 'orbit_blade' : 'orbit_chair', G.t * 11 + i * 3.1);
+        if (of2) {
+          const s2 = leg ? 22 : 17;
+          ctx.drawImage(of2, ox - s2 / 2, oy - s2 / 2, s2, s2);
+          continue;
+        }
         ctx.save();
         ctx.translate(ox, oy);
         ctx.rotate(oa + Math.PI / 2);
@@ -1298,6 +1410,62 @@ function drawProj(ctx, G, p) {
       ctx.fillRect(x - 2, y - 1, 4, 1);
       ctx.fillRect(x - 2, y + 1, 3, 1);
       break;
+    /* ===== v3.1 新弹形 ===== */
+    case 'wave': {   // 裁员大刀"毕业"刀气月牙：垂直于飞行方向的弧
+      const a = Math.atan2(p.vy, p.vx);
+      ctx.save();
+      ctx.translate(x, y); ctx.rotate(a);
+      ctx.strokeStyle = p.color; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(-p.r * .8, 0, p.r + 3, -1.15, 1.15); ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(-p.r * .8, 0, p.r + 1, -.95, .95); ctx.stroke();
+      ctx.restore();
+      break;
+    }
+    case 'plane': {   // 转发邮件纸飞机 + FW 尾迹
+      const a = Math.atan2(p.vy, p.vx);
+      ctx.save();
+      ctx.translate(x, y); ctx.rotate(a);
+      ctx.fillStyle = '#f2efe6';
+      ctx.beginPath(); ctx.moveTo(5, 0); ctx.lineTo(-4, -4); ctx.lineTo(-2, 0); ctx.lineTo(-4, 4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = p.color; ctx.fillRect(-2, -1, 2, 2);
+      ctx.restore();
+      break;
+    }
+    case 'docstack':   // 需求文档摞
+      ctx.fillStyle = '#f2efe6'; ctx.fillRect(x - 4, y - 5, 8, 9);
+      ctx.fillStyle = '#ffd9a0'; ctx.fillRect(x - 3, y - 4, 8, 9);
+      ctx.fillStyle = '#14161d'; ctx.fillRect(x - 2, y - 2, 5, 1); ctx.fillRect(x - 2, y, 4, 1);
+      break;
+    case 'ball': {   // 踢皮球
+      ctx.save();
+      ctx.translate(x, y); ctx.rotate(G.t * 9 + p.x * .05);
+      ctx.fillStyle = '#f2efe6';
+      ctx.beginPath(); ctx.arc(0, 0, p.r + 1, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#14161d';
+      ctx.fillRect(-1, -p.r, 2, 2); ctx.fillRect(-p.r, -1, 2, 2); ctx.fillRect(p.r - 2, -1, 2, 2); ctx.fillRect(-1, -1, 3, 3);
+      ctx.restore();
+      break;
+    }
+    case 'pot': {   // 击鼓传锅大铁锅
+      ctx.save();
+      ctx.translate(x, y); ctx.rotate(G.t * 7);
+      ctx.fillStyle = '#3a3a3a';
+      ctx.beginPath(); ctx.arc(0, 0, p.r + 1, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#5a5654';
+      ctx.beginPath(); ctx.arc(0, 0, p.r - 2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#3a3a3a'; ctx.fillRect(-p.r - 4, -1, 4, 3); ctx.fillRect(p.r, -1, 4, 3);
+      ctx.restore();
+      break;
+    }
+    case 'invite':   // 会议邀请卡（旋转日历页）
+      ctx.save();
+      ctx.translate(x, y); ctx.rotate(G.t * 10);
+      ctx.fillStyle = '#f2efe6'; ctx.fillRect(-4, -5, 8, 10);
+      ctx.fillStyle = p.color; ctx.fillRect(-4, -5, 8, 3);
+      ctx.fillStyle = '#14161d'; ctx.fillRect(-2, 0, 4, 1); ctx.fillRect(-2, 2, 3, 1);
+      ctx.restore();
+      break;
     case 'mugp': {
       /* 九帧翻滚马克杯（素材未载回退咖啡图标） */
       const mf = fxFrame('proj_mug', ((G.t * 14 + p.x * .11) % 9) / 9);
@@ -1396,6 +1564,21 @@ function drawFx(ctx, f) {
       ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1 - k * .6), 0, Math.PI * 2); ctx.fill();
     }
   } else if (f.type === 'slash') {
+    /* v3.2 素材帧优先：fx_slash 九帧月牙（开口朝右按 f.ang 旋转）；全圆弧（旋风/功德环）走程序化 */
+    if (f.arc < 5) {
+      const sfr2 = fxFrame('fx_slash', 1 - k);
+      if (sfr2) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, k * 1.4);
+        ctx.translate(f.x, f.y);
+        ctx.rotate(f.ang);
+        const ss = f.r * 2.3;
+        ctx.drawImage(sfr2, Math.round(-ss / 2), Math.round(-ss / 2), Math.round(ss), Math.round(ss));
+        ctx.restore();
+        ctx.globalAlpha = 1;
+        return;
+      }
+    }
     /* v2.9 近战弧光：扇形楔从窄到全弧展开，边缘亮线拖白 */
     const sweep = Math.min(1, (1 - k) * 2.5);   // 前 40% 时间完成展开
     const a0 = f.ang - f.arc / 2, a1 = a0 + f.arc * sweep;
@@ -1409,6 +1592,35 @@ function drawFx(ctx, f) {
     ctx.globalAlpha = k * .6;
     ctx.strokeStyle = f.color; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(f.x, f.y, f.r * .7, a0, a1); ctx.stroke();
+  } else if (f.type === 'vortexfx') {
+    /* v3.2 强制拉会漩涡：程序化旋转 + 帧序循环——转不转不赌生成帧的相位差 */
+    const vf = fxFrame('fx_vortex', (f.t * 2.2) % 1);
+    if (vf) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(.92, k * 1.2);
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.t * 5.5);
+      const s = f.r * 1.6;
+      ctx.drawImage(vf, Math.round(-s / 2), Math.round(-s / 2), Math.round(s), Math.round(s));
+      ctx.restore();
+    } else {
+      /* 程序化兜底：三条渐隐螺旋臂 */
+      ctx.save();
+      ctx.globalAlpha = k * .6;
+      ctx.strokeStyle = '#b665ff'; ctx.lineWidth = 3;
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.t * 5.5);
+      for (let arm = 0; arm < 3; arm++) {
+        ctx.beginPath();
+        for (let i = 0; i <= 10; i++) {
+          const a = arm * Math.PI * 2 / 3 + i * .32;
+          const rr = f.r * (1 - i / 12);
+          i ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
   } else if (f.type === 'spark') {
     /* 子弹命中火花（素材未加载时静默跳过——命中粒子仍在） */
     const fr = fxFrame('fx_spark', 1 - k);

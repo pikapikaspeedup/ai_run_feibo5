@@ -18,4 +18,6 @@ export const CONSUMABLES = {
   /* v2.8 梗道具 */
   grad_gift: { name: '毕业大礼包', spr: 'doc2n', desc: '被裁同事的遗产：开出 2 件随机物资' },
   startup_plan: { name: '创业计划书', spr: 'doc', desc: '赌一把：60% 全属性提升 20 秒，40% 天使轮跳票扣血' },
+  /* v3.0 磁铁时刻 */
+  robot_vac: { name: '扫地机器人', spr: 'reset', desc: '全场经验豆一口吸干（残血时连咖啡豆一起代收）' },
 };

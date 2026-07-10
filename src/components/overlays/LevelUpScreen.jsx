@@ -1,6 +1,6 @@
 import React from 'react';
 import { getG, getLevelChoices, pickLevelChoice, rerollLevelup, snoozePersonaIntro, choosePersonaFree } from '../../game/core.js';
-import { SUB_ICONS, ACTIVE_ICONS } from '../icons.js';
+import { SUB_ICONS, ACTIVE_ICONS, WPN_ICONS } from '../icons.js';
 
 /* v2.4 人设头像（portrait_<persona>.png，AI 生成切片） */
 const PORTRAITS = {};
@@ -62,6 +62,13 @@ export default function LevelUpScreen() {
                 {s.kind === 'active' && ACTIVE_ICONS[s.id] && (
                   <img src={ACTIVE_ICONS[s.id]} alt="" style={{ width: 30, height: 30, imageRendering: 'pixelated', float: 'right', marginLeft: 6 }} />
                 )}
+                {/* v3.2 武器卡图标（wpn_new 用卡面滚的武器 wid；wpn_up 用对应槽武器 id） */}
+                {(s.kind === 'wpn_new' || s.kind === 'wpn_up') && (() => {
+                  const wid = s.wid || (s.slotKey && pl[s.slotKey] && pl[s.slotKey].id);
+                  return wid && WPN_ICONS[wid]
+                    ? <img src={WPN_ICONS[wid]} alt="" style={{ width: 30, height: 30, imageRendering: 'pixelated', float: 'right', marginLeft: 6 }} />
+                    : null;
+                })()}
                 <div className="k-name">{s.rare ? '✨ ' : s.kind === 'sub' ? '🔧 ' : s.kind === 'active' ? '⚡ ' : ''}{s.name}</div>
                 <div className="k-eff">{s.eff}</div>
                 {s.rare && <div className="k-eff" style={{ color: '#c9a227' }}>★ 精修版：效果双倍</div>}

@@ -9,3 +9,8 @@ export const ACTIVE_ICONS = {};
 for (const [path, url] of Object.entries(import.meta.glob('../assets/generated/active_*.png', { eager: true, import: 'default' }))) {
   ACTIVE_ICONS[path.split('/').pop().replace('.png', '').replace(/^active_/, '')] = url;
 }
+/* v3.2 武器芯片图标（chip_<武器id>.png）：升级卡「武器升级/新武器上岗」+ 图鉴共用 */
+export const WPN_ICONS = {};
+for (const [path, url] of Object.entries(import.meta.glob('../assets/generated/chip_*.png', { eager: true, import: 'default' }))) {
+  WPN_ICONS[path.split('/').pop().replace('.png', '').replace(/^chip_/, '')] = url;
+}

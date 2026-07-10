@@ -8,7 +8,7 @@ import { WEAPONS, LEGENDS, findRecipe, recipePartner, wdef } from './data/weapon
 import { SKILLS } from './data/skills.js';
 import { CONSUMABLES } from './data/consumables.js';
 import { TECH, PLAYER_ONLY_TECH, TECH_TIERS, DISTILLS, CURSES, ELITES, ELITE_T1, ELITE_T2, DEPT_BOSSES, DEPT_BOSS_IDS, FINAL_BOSS_PHASES, ELITE_AFFIXES } from './data/tech.js';
-import { MOBS, subWaves, PUBLIC_INCIDENTS, BR_MOB_POOL } from './data/mobs.js';
+import { MOBS, subWaves, waveComp, PUBLIC_INCIDENTS, BR_MOB_POOL } from './data/mobs.js';
 import { OBSTACLE_DEFS, PROP_VISUAL, T3_HIDE_RADIUS, T3_HIDE_DUR, T2_BLOCK_CHANCE, DESTROY_FADE_T, REGEN_CD, isDirectFireBullet } from './data/obstacles.js';
 import { CHUNK_SIZE, CHUNK_STRIDE, GRID_N, CHUNK_TYPES, generateChunkGrid } from './data/chunks.js';
 import { pickTemplate, JITTER } from './data/templates.js';
@@ -487,6 +487,17 @@ function spawnItem(g, id, x, y) {
   g.pickups.push({ type: 'item', id: id || pickConsumableId(g), x, y, bob: rand(0, 6) });
 }
 function spawnXp(g, x, y, amt) {
+  /* v3.0 合豆：24px 内已有未起飞的豆直接并入（人墙波尸潮不至于铺 500 个点，大豆=多巴胺）；
+   * 全场豆数上限 220，超了并进最近的一颗 */
+  let nearest = null, nd = Infinity, xpCount = 0;
+  for (const p of g.pickups) {
+    if (p.dead || p.type !== 'xp' || p._fly) continue;
+    xpCount++;
+    const d2 = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+    if (d2 < nd) { nd = d2; nearest = p; }
+    if (d2 < 24 * 24 && p.amt < 60) { p.amt += amt; return; }
+  }
+  if (xpCount >= 220 && nearest) { nearest.amt += amt; return; }
   g.pickups.push({ type: 'xp', amt, x: x + rand(-8, 8), y: y + rand(-8, 8), bob: rand(0, 6) });
 }
 /* 随机选一个模组 id（蒸馏为稀有权重） */
@@ -583,7 +594,7 @@ function onObstacleDestroyed(o) {
   } else if (o.spr === 'cooler' || o.spr === 'drinks') {
     addFx({ type: 'waterspillfx', x: cx, y: cy - 4, r: 24, life: 1 });
     /* 水渍滑区：敌人踩上减速 4 秒（dps 0 纯控场） */
-    G.burns.push({ x: cx, y: cy + 4, r: 30, dps: 0, slow: .35, life: 4, t: 0, owner: G.player, color: '#6ab8e8' });
+    G.burns.push({ x: cx, y: cy + 4, r: 30, dps: 0, slow: .35, life: 4, t: 0, owner: G.player, color: '#6ab8e8', spr: 'fx_waterpool' });
     addFloat(cx, cy - 20, '「小心地滑」', '#9ad1ff', 9, 1.6);
   } else if (o.spr === 'plant') {
     addFloat(cx, cy - 18, '「绿萝：我做错了什么」', '#7ee08a', 9, 1.8);
@@ -669,7 +680,7 @@ function onObstacleDestroyed(o) {
     if (nearPlayer(cx, cy)) SFX.mushroom();   // 覆盖默认 explo SFX（更震撼）
   } else if (loot.special === 'slow_pool') {
     /* 饮水机爆：60 半径 8s 减速地面 */
-    G.burns.push({ x: cx, y: cy, r: 60, dps: 0, slow: .4, life: 8, t: 0, owner: G.player, color: '#38d3e8' });
+    G.burns.push({ x: cx, y: cy, r: 60, dps: 0, slow: .4, life: 8, t: 0, owner: G.player, color: '#38d3e8', spr: 'fx_waterpool' });
     addFloat(cx, cy - 12, '水漫办公室', '#38d3e8', 7, 1);
   } else if (loot.special === 'heal_aura') {
     /* 咖啡机爆：回血光环 6s。半径 20 连站进去都难，放宽到 40；治疗结算见燃烧区循环的 dps<0 分支 */
@@ -790,6 +801,11 @@ function spawnBullet(u, a, opt = {}) {
     _peaSubsidy: opt._peaSubsidy || false,
     _shotgun: opt._shotgun || false,
     coverBypassed: false,
+    /* v3.1 新机制字段：弹射/分裂/弹墙/引力井/沿途埋雷/首帧忽略单位 */
+    ricochet: opt.ricochet || null, split: opt.split || null,
+    wallBounce: opt.wallBounce || null, vortexOn: opt.vortexOn || null,
+    potMine: opt.potMine || null, ignoreUnit: opt.ignoreUnit || null,
+    _viralSplit: opt._viralSplit || null,
   });
   /* 少样本提示：并排复制弹道（复制弹伤害按品级折损，防终盘乘算失控） */
   if (u.mods.multishot && !opt._echo) {
@@ -867,6 +883,36 @@ function chainZap(u, sx, sy, firstTarget, count, dmg, decay, stun = 0, endBoom =
     explodeAtNoRecurse(last.x, last.y, 26, dmg * .6, u, '#7ac8ff');
   }
   if (pts.length > 1) addFx({ type: 'bolt', pts, color: '#bfe6ff', life: .22 });
+}
+
+/* v3.1 「驳回」空袭：预警圈 → 红章砸落（伤害+眩晕+红印 decal）。stamp / leg_karma 共用 */
+function stampStrike(u, x, y, dmg, r, stun) {
+  addFx({ type: 'ringwarn', x, y, r, color: '#d43a2f', life: .35 });
+  delay(() => {
+    if (!u.alive) return;
+    addFx({ type: 'stampfx', x, y, r: r * 1.1, life: .45 });
+    addBattleDecal(x, y, 18);   // decal_f18 = 红色"驳回"印（props_v31 切片）
+    for (const t of G.units) {
+      if (!isFoe(u, t) || dist2(x, y, t.x, t.y) > (r + t.r) * (r + t.r)) continue;
+      applyDamage(t, dmg, u, { stun });
+    }
+    if (nearPlayer(x, y)) { SFX.deny(); if (Math.random() < .6) addFloat(x, y - r - 4, '驳回！', '#ff6a6a', 9, .9); }
+  }, .35);
+}
+/* v3.1 物理击飞+撞击传伤（领导拍板/毕业典礼）：被拍飞的撞到别人，双方都疼 */
+function shoveWithImpact(u, t, kb, impactDmg) {
+  if (t.isBoss || t.eliteTier === 2) return;
+  const ka = Math.atan2(t.y - u.y, t.x - u.x);
+  t.x = clamp(t.x + Math.cos(ka) * kb, 10, TUNE.world - 10);
+  t.y = clamp(t.y + Math.sin(ka) * kb, 10, TUNE.world - 10);
+  for (const o of G.units) {
+    if (o === t || !isFoe(u, o)) continue;
+    if (dist2(t.x, t.y, o.x, o.y) > (t.r + o.r + 5) * (t.r + o.r + 5)) continue;
+    applyDamage(o, impactDmg, u, { quiet: true, fromProc: true });
+    applyDamage(t, impactDmg * .5, u, { quiet: true, fromProc: true });
+    addParts((t.x + o.x) / 2, (t.y + o.y) / 2, '#ffcf33', 4, 70, .3);
+    break;   // 一次击飞只结算一次撞击
+  }
 }
 
 function updateWeapon(u, dt, wantFire, aimA) {
@@ -1039,20 +1085,125 @@ function updateWeapon(u, dt, wantFire, aimA) {
   }
 
   /* ---------- v18 新增：5 种非弹道 kind ---------- */
-  /* 贴身持续光环——tick 式伤害，射程模组扩范围（复用 shredder 模式） */
-  if (kind === 'aura') {
+  /* 贴身持续光环——tick 式伤害，射程模组扩范围。
+   * v3.1 复活：隔夜韭菜盒子（Lv2半径/Lv4减速/Lv5恐惧）+ 传说·茶水间生化事故（毒滩蔓延） */
+  if (kind === 'aura' || kind === 'leg_bio') {
+    const leg = kind === 'leg_bio';
     w.tickT = (w.tickT || 0) - dt * fireRateOf(u);
     if (w.tickT <= 0) {
       w.tickT = def.tickCd;
-      const r = def.range * u.mods.range;
+      const r = def.range * (!leg && w.lvl >= 2 ? 1.2 : 1) * u.mods.range;
       const dmg2 = wpnDmg(u);
       let hit = false;
       for (const t of G.units) {
         if (!isFoe(u, t) || dist2(u.x, u.y, t.x, t.y) > r * r) continue;
         applyDamage(t, dmg2, u, { quiet: true });
+        t.oaSlowT = Math.max(t.oaSlowT || 0, leg ? .6 : w.lvl >= 4 ? .5 : .3);
+        /* Lv5 生化级恶臭：杂鱼被熏到掉头逃跑 */
+        if (!leg && w.lvl >= 5 && t.isMob && Math.random() < .4) t.fleeT = Math.max(t.fleeT || 0, .9);
         hit = true;
       }
       if (hit && u.isPlayer && Math.random() < .3) addParts(u.x + rand(-r/2, r/2), u.y + rand(-r/2, r/2), def.color, 1, 20, .3);
+      w._auraR = r;   // render 层臭气圈用
+    }
+    /* 生化事故：圈内长毒水滩向外蔓延 */
+    if (leg) {
+      w.poolT2 = (w.poolT2 || 0) - dt;
+      if (w.poolT2 <= 0) {
+        w.poolT2 = def.poolCd;
+        const a = rand(0, Math.PI * 2), rr = rand(20, def.range * u.mods.range);
+        G.burns.push({ x: u.x + Math.cos(a) * rr, y: u.y + Math.sin(a) * rr, r: 22,
+          dps: def.poolDps * u.mods.dmg, slow: .35, life: def.poolT, t: 0, owner: u, color: '#8fe08a' });
+      }
+    }
+    return;
+  }
+  /* v3.1 电子木鱼 / 电子功德林：自动敲击攒功德，攒满放金色功德冲击环 */
+  if (kind === 'karma' || kind === 'leg_karma') {
+    const leg = kind === 'leg_karma';
+    w.tapT = (w.tapT || 0) - dt * fireRateOf(u);
+    if (w.tapT <= 0) {
+      w.tapT = def.tapCd * (!leg && w.lvl >= 2 ? .8 : 1);
+      w.merit = (w.merit || 0) + 1;
+      if (u.isPlayer) { addFloat(u.x + rand(-10, 10), u.y - 18, '功德+1', '#ffe27a', 6, .6); if (Math.random() < .4) SFX.pickup(); }
+      const need = leg ? def.need : (w.lvl >= 3 ? 8 : def.need);
+      if (w.merit >= need) {
+        w.merit = 0;
+        const scaleK = wpnDmg(u) / def.dmg;   // 吃满等级/模组/副手系数
+        const R = def.novaR * (!leg && w.lvl >= 4 ? 1.35 : 1) * u.mods.range;
+        addFx({ type: 'karmafx', x: u.x, y: u.y - 4, r: R, life: .5 });
+        addFx({ type: 'slash', x: u.x, y: u.y - 4, ang: 0, arc: Math.PI * 2, r: R, color: '#ffe27a', life: .3 });
+        for (const t of G.units) {
+          if (!isFoe(u, t) || dist2(u.x, u.y, t.x, t.y) > R * R) continue;
+          applyDamage(t, def.novaDmg * scaleK, u, { stun: .12 });
+          if (!leg && w.lvl >= 5) { t.vulnT = Math.max(t.vulnT || 0, 2); t.vulnBonus = Math.max(t.vulnBonus || 0, .2); }
+          if (!t.isBoss && t.eliteTier !== 2) {
+            const ka = Math.atan2(t.y - u.y, t.x - u.x);
+            t.x = clamp(t.x + Math.cos(ka) * 26, 10, TUNE.world - 10);
+            t.y = clamp(t.y + Math.sin(ka) * 26, 10, TUNE.world - 10);
+          }
+        }
+        if (u.isPlayer) { addFloat(u.x, u.y - 28, '🔔 功德圆满', '#ffe27a', 10, 1.2); SFX.fuse(); }
+      }
+    }
+    /* 功德林：周期全屏"驳回"章雨 */
+    if (leg) {
+      w.stampT2 = (w.stampT2 ?? def.stampCd) - dt;
+      if (w.stampT2 <= 0) {
+        w.stampT2 = def.stampCd;
+        const foes = G.units.filter(t => isFoe(u, t) && dist2(u.x, u.y, t.x, t.y) < 340 * 340);
+        for (let i = 0; i < Math.min(def.stampN, foes.length); i++) {
+          const t = foes[randi(0, foes.length - 1)];
+          stampStrike(u, t.x + rand(-10, 10), t.y + rand(-10, 10), def.stampDmg * u.mods.dmg, def.stampR, .3);
+        }
+      }
+    }
+    return;
+  }
+  /* v3.1 「驳回」印章：随机点名空袭敌群 */
+  if (kind === 'stamp') {
+    w.stampT = (w.stampT || 0) - dt * fireRateOf(u);
+    if (w.stampT <= 0) {
+      const rng = def.range * u.mods.range;
+      const foes = G.units.filter(t => isFoe(u, t) && dist2(u.x, u.y, t.x, t.y) < rng * rng);
+      if (!foes.length) { w.stampT = .25; return; }
+      w.stampT = def.cd;
+      const n = 1 + (w.lvl >= 2 ? 1 : 0);
+      const triple = w.lvl >= 5 ? 3 : 1;   // Lv5 三连驳回：同点连砸
+      for (let i = 0; i < n; i++) {
+        const t = foes[randi(0, foes.length - 1)];
+        const sx = t.x, sy = t.y;
+        for (let k = 0; k < triple; k++)
+          delay(() => { if (u.alive) stampStrike(u, sx + rand(-10, 10), sy + rand(-10, 10), wpnDmg(u), def.stampR * (w.lvl >= 3 ? 1.4 : 1) * u.mods.range, w.lvl >= 4 ? .4 : 0); }, k * .28);
+      }
+    }
+    return;
+  }
+  /* v3.1 空调漏水：头顶随机滴水成减速水滩 */
+  if (kind === 'rain') {
+    w.rainT = (w.rainT || 0) - dt * fireRateOf(u);
+    if (w.rainT <= 0) {
+      w.rainT = def.cd;
+      w.burstN = (w.burstN || 0) + 1;
+      const burst = w.lvl >= 5 && w.burstN % 5 === 0;   // Lv5 总闸爆裂
+      const drops = burst ? 5 : 1 + (w.lvl >= 2 ? 1 : 0);
+      for (let i = 0; i < drops; i++) {
+        const a = rand(0, Math.PI * 2), rr = rand(30, def.range * u.mods.range);
+        const dx = clamp(u.x + Math.cos(a) * rr, 20, TUNE.world - 20);
+        const dy = clamp(u.y + Math.sin(a) * rr, 20, TUNE.world - 20);
+        delay(() => {
+          if (!u.alive) return;
+          addFx({ type: 'acdripfx', x: dx, y: dy, r: 16, life: .5 });
+          const R = def.dropR * (w.lvl >= 3 ? 1.3 : 1) * u.mods.range;
+          for (const t of G.units) {
+            if (!isFoe(u, t) || dist2(dx, dy, t.x, t.y) > (R + t.r) * (R + t.r)) continue;
+            applyDamage(t, wpnDmg(u), u, { quiet: true });
+          }
+          G.burns.push({ x: dx, y: dy, r: R, dps: wpnDmg(u) * .55, slow: .35,
+            life: def.poolT * (w.lvl >= 4 ? 1.5 : 1), t: 0, owner: u, color: '#6ab8e8', spr: 'fx_waterpool' });
+        }, .4 + i * .12);
+      }
+      if (u.isPlayer && burst) addFloat(u.x, u.y - 24, '💦 总闸爆裂！', '#6ab8e8', 9, 1.2);
     }
     return;
   }
@@ -1072,13 +1223,18 @@ function updateWeapon(u, dt, wantFire, aimA) {
   }
   /* 尾迹布雷——只在移动中触发，走 explodeAt + 延迟触发（用 G.burns 存活+触发圈） */
   if (kind === 'mine') {
+    /* v3.1 复活：历史遗留问题——Lv2 埋雷更勤 / Lv3 爆炸半径+30% / Lv4 双雷 / Lv5 连环塌方 */
     if (u.walkT > .05 && u.standT < .1) {   // 正在移动
       w.mineT = (w.mineT || 0) - dt * fireRateOf(u);
       if (w.mineT <= 0) {
-        w.mineT = def.cd;
-        // 用 G.burns 承载"待引爆的地雷"，触发条件在 G.burns 兼容遍历里补充判定
-        G.burns.push({ x: u.x, y: u.y, r: def.triggerR, dps: 0, slow: 0, life: def.fuseT + 6, t: 0,
-          owner: u, color: def.color, mineDmg: wpnDmg(u) * 2.5, mineExplR: def.r, mineArmed: false, mineFuseT: def.fuseT });
+        w.mineT = def.cd * (w.lvl >= 2 ? .75 : 1);
+        const n = w.lvl >= 4 ? 2 : 1;
+        for (let i = 0; i < n; i++)
+          G.burns.push({ x: u.x + (i ? rand(-16, 16) : 0), y: u.y + (i ? rand(-16, 16) : 0),
+            r: def.triggerR, dps: 0, slow: 0, life: def.fuseT + 6, t: 0,
+            owner: u, color: def.color, mineDmg: wpnDmg(u) * 2.5,
+            mineExplR: def.r * (w.lvl >= 3 ? 1.3 : 1), mineArmed: false, mineFuseT: def.fuseT,
+            mineChain: w.lvl >= 5 });
       }
     }
     return;
@@ -1262,7 +1418,7 @@ function updateWeapon(u, dt, wantFire, aimA) {
           w.foamT = .5;
           const fd = rng * rand(.4, .8);
           G.burns.push({ x: u.x + Math.cos(aimA) * fd, y: u.y + Math.sin(aimA) * fd,
-            r: 26, dps: 0, slow: .4, life: 2.5, t: 0, owner: u, color: '#dfe9f2' });
+            r: 26, dps: 0, slow: .4, life: 2.5, t: 0, owner: u, color: '#dfe9f2', spr: 'fx_waterpool' });
         }
       }
       /* Lv5 过热爆发：持续喷 2.5s 自动在锥心炸一次 */
@@ -1508,6 +1664,105 @@ function updateWeapon(u, dt, wantFire, aimA) {
         dmg: dmg * (big ? 3 : 1), stun: big ? .2 : 0 });
       if (w.lvl >= 4) for (const s of [-1, 1])
         spawnBullet(u, aimA + s * .1, { shape: 'streak', r: 2, range: rng, pierce, dmg: dmg * .6 });
+      break;
+    }
+    /* v3.1 群发转发邮件 / 舆情失控：命中弹射，每跳增伤（谣言越传越离谱）；传说每跳再裂 */
+    case 'ricochet': case 'leg_viral': {
+      const leg = kind === 'leg_viral';
+      const hops = def.hops + (!leg && w.lvl >= 2 ? 1 : 0) + (!leg && w.lvl >= 4 ? 2 : 0);
+      const mult = !leg && w.lvl >= 3 ? 1.22 : def.hopMult;
+      spawnBullet(u, aimA, { shape: 'plane', r: leg ? 3.5 : 3,
+        ricochet: { hops, mult, endBoom: leg || w.lvl >= 5 },
+        _viralSplit: leg ? { n: def.splitN, dmgMult: def.splitDmg, depth: 1 } : null });
+      break;
+    }
+    /* v3.1 需求拆解：命中裂成扇形子需求 */
+    case 'split': {
+      const n = def.splitN + (w.lvl >= 3 ? 1 : 0);
+      spawnBullet(u, aimA, { shape: 'docstack', r: 3.5,
+        split: { n, dmgMult: def.splitDmg * (w.lvl >= 2 ? 1.25 : 1), depth: w.lvl >= 5 ? 2 : 1, pierce: w.lvl >= 4 ? 1 : 0 } });
+      break;
+    }
+    /* v3.1 火线需求：落点铺燃烧便签墙（垂直于弹道） */
+    case 'firewall': {
+      const len = def.wallLen + (w.lvl >= 2 ? 2 : 0);
+      const life = def.wallT * (w.lvl >= 4 ? 1.5 : 1);
+      const dps = dmg * (w.lvl >= 3 ? 1.25 : 1);
+      const distW = Math.min(def.range * u.mods.range, 190);
+      const cx = clamp(u.x + Math.cos(aimA) * distW, 20, TUNE.world - 20);
+      const cy = clamp(u.y + Math.sin(aimA) * distW, 20, TUNE.world - 20);
+      const pa = aimA + Math.PI / 2;
+      const layers = w.lvl >= 5 ? [0, 28] : [0];
+      for (const off of layers) for (let i = 0; i < len; i++) {
+        const t2 = i - (len - 1) / 2;
+        G.burns.push({ x: cx + Math.cos(pa) * t2 * 22 + Math.cos(aimA) * off,
+          y: cy + Math.sin(pa) * t2 * 22 + Math.sin(aimA) * off,
+          r: 16, dps, slow: .3, life, t: 0, owner: u, color: '#ff6a3d', fireWall: true });
+      }
+      addFx({ type: 'boom', x: cx, y: cy, r: 24, color: '#ff6a3d', life: .3 });
+      if (u.isPlayer) SFX.explo();
+      break;
+    }
+    /* v3.1 领导拍板 / 毕业典礼：巨掌拍击+击飞，撞人传递冲击伤（人撞人保龄球） */
+    case 'slam': case 'leg_gradparty': {
+      const leg = kind === 'leg_gradparty';
+      const reach = def.reach * (!leg && w.lvl >= 2 ? 1.3 : 1) * u.mods.range;
+      const manual = u.isPlayer && !touch.using && mouse.down;
+      if (!manual && !nearestUnit(u.x, u.y, reach + 16, o => isFoe(u, o))) { w.cd = .15; break; }
+      const kb = def.kb * (!leg && w.lvl >= 3 ? 1.42 : 1);
+      const transfer = leg ? .8 : w.lvl >= 4 ? .8 : .5;
+      const fx = u.x + Math.cos(aimA) * reach * .55, fy = u.y + Math.sin(aimA) * reach * .55;
+      addFx({ type: 'slamfx', x: fx, y: fy, r: reach * .8, life: .45 });
+      addFx({ type: 'slash', x: u.x, y: u.y - 4, ang: aimA, arc: def.arc, r: reach, color: def.color, life: .22 });
+      for (const t of G.units) {
+        if (!isFoe(u, t)) continue;
+        if (dist2(u.x, u.y, t.x, t.y) > (reach + t.r) * (reach + t.r)) continue;
+        let da = Math.atan2(t.y - u.y, t.x - u.x) - aimA;
+        while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+        if (Math.abs(da) > def.arc / 2 + .15) continue;
+        applyDamage(t, dmg, u, { stun: .2 });
+        shoveWithImpact(u, t, kb, dmg * transfer);
+      }
+      /* Lv5 拍出裂缝冲击波 / 毕业典礼四向刀气 */
+      if (!leg && w.lvl >= 5) spawnBullet(u, aimA, { shape: 'wave', r: 6, range: 180, dmg: dmg * .6, pierce: 999 });
+      if (leg) for (let k = 0; k < 4; k++)
+        spawnBullet(u, aimA + k * Math.PI / 2, { shape: 'wave', r: 8, range: 260, dmg: def.waveDmg * u.mods.dmg, pierce: 999, spd: def.spd });
+      if (u.isPlayer) { SFX.explo(); addShake(3); if (Math.random() < .4) addFloat(u.x, u.y - 26, '就这么定了！', '#ffcf33', 9, 1); }
+      break;
+    }
+    /* v3.1 裁员大刀：挥砍放出贯穿刀气月牙 */
+    case 'slashwave': {
+      const n = w.lvl >= 5 ? 3 : 1;
+      if (w.lvl >= 4) w.cd = def.cd * .8;
+      addFx({ type: 'slash', x: u.x, y: u.y - 4, ang: aimA, arc: 1.6, r: 34, color: def.color, life: .18 });
+      for (let i = 0; i < n; i++) {
+        const a2 = aimA + (i - (n - 1) / 2) * .31;
+        spawnBullet(u, a2, { shape: 'wave', r: def.waveW * (w.lvl >= 2 ? 1.4 : 1),
+          range: def.range * (w.lvl >= 3 ? 1.4 : 1), pierce: 999, dmg });
+      }
+      break;
+    }
+    /* v3.1 强制拉会 / 项目火葬场：会议邀请落点生成引力漩涡 */
+    case 'vortex': case 'leg_crema': {
+      const leg = kind === 'leg_crema';
+      const mk = a2 => spawnBullet(u, a2, { shape: 'invite', r: 4, spd: def.spd, range: def.range, dmg: 0, pierce: 0,
+        vortexOn: { pullR: def.pullR * (!leg && w.lvl >= 2 ? 1.25 : 1) * u.mods.range, pullT: def.pullT,
+          dmg, vuln: !leg && w.lvl >= 3, crash: !leg && w.lvl >= 5,
+          ringDps: leg ? def.ringDps * u.mods.dmg : 0 } });
+      mk(aimA);
+      if (!leg && w.lvl >= 4) mk(aimA + .45);
+      break;
+    }
+    /* v3.1 踢皮球 / 击鼓传锅：弹墙台球（越弹越快），锅沿途埋雷 */
+    case 'bounce': case 'leg_pot': {
+      const pot = kind === 'leg_pot';
+      const mkBall = a2 => spawnBullet(u, a2, { shape: pot ? 'pot' : 'ball', r: pot ? 7 : 5, spd: def.spd, range: 340,
+        pierce: 999, dmg, sprKey: pot ? 'proj_pot_relay' : undefined,
+        wallBounce: { left: def.maxBounce + (!pot && w.lvl >= 3 ? 4 : 0), accel: !pot && w.lvl >= 3 ? 1.07 : 1.045,
+          split: !pot && w.lvl >= 5, boomR: pot ? def.boomR : 0 },
+        potMine: pot ? { every: def.mineEvery, dmg: def.mineDmg, t: 0 } : null });
+      mkBall(aimA);
+      if (!pot && w.lvl >= 2) mkBall(aimA + rand(1.8, 2.6));
       break;
     }
   }
@@ -1937,7 +2192,9 @@ export function applyDamage(target, raw, attacker, opts = {}) {
     }
   }
   if (attacker && target.bot) { target.bot.provokedT = 4; target.lastAtk = attacker; }
-  if (target.isPlayer) { addShake(2); SFX.hurt(); }
+  /* v3.0 被打不再无脑震屏：50 人局里挨打是常态，每中一发抖一下=玩家感觉"位置在漂"。
+   * 只有单发 ≥12% 最大生命的重击才震，日常刮痧只留红闪+音效 */
+  if (target.isPlayer) { if (dmg >= maxHp(target) * .12) addShake(2); SFX.hurt(); }
   /* v18: 通用 proc 触发——onHit(攻击者)、onCrit(仅暴击)、onHurt(受伤者)
    * opts.fromProc 防递归：proc 造成的伤害不再触发新 proc，杜绝无限循环 */
   if (!opts.fromProc && attacker && attacker.mods && attacker.mods.procs) {
@@ -2165,6 +2422,9 @@ function killUnit(victim, killer, cause, opts = {}) {
         addFloat(victim.x, victim.y - 14, childType === victim.mobType ? '需求又变了！' : '转发出去了！', '#7ac8ff', 6, .8);
     }
     if (Math.random() < .15) spawnXp(G, victim.x, victim.y, 2);
+    /* v3.0 杂鱼小概率掉咖啡豆（回血）：配合升级满血，人堆里的续航来自"多杀"而不是逃跑 */
+    if (Math.random() < .05 && (victim.hpBase || 0) >= 8)
+      G.pickups.push({ type: 'heal', amt: 10, x: victim.x + rand(-6, 6), y: victim.y + rand(-6, 6), bob: rand(0, 6) });
     /* 工资小偷：吐出偷走的全部经验 ×1.5（打死它就是赚的） */
     if (victim.stolenXp) {
       spawnXp(G, victim.x, victim.y, Math.round(victim.stolenXp * 1.5) + 2);
@@ -2237,8 +2497,12 @@ function killUnit(victim, killer, cause, opts = {}) {
 
   /* 击杀奖励 */
   if (killer && killer.alive) {
-    gainXp(killer, victim.isMob ? (victim.mobXp || MOBS[victim.mobType].xp)
-      : (TUNE.xpPerKill + victim.level * 3) * (victim.isBoss ? 4 : 1) + (victim.isElite ? 15 : 0));
+    const kxp = victim.isMob ? (victim.mobXp || MOBS[victim.mobType].xp)
+      : (TUNE.xpPerKill + victim.level * 3) * (victim.isBoss ? 4 : 1) + (victim.isElite ? 15 : 0);
+    /* v3.0 VS 化：玩家杀怪的经验落地成豆（磁吸捡取），而不是无声进账——
+     * "杀怪→宝石铺地→冲进去吸干"才是割草的核心循环；同事/精英击杀与 bot 击杀仍直接进账 */
+    if (victim.isMob && killer.isPlayer) spawnXp(G, victim.x, victim.y, kxp);
+    else gainXp(killer, kxp);
     if (killer.mods.killHeal) killer.hp = Math.min(maxHp(killer), killer.hp + killer.mods.killHeal * (victim.isMob ? .3 : 1));
     if (killer.isPlayer && killer.wageDebt > 0) {
       const cut = victim.isMob ? 10 : 24;
@@ -2471,9 +2735,10 @@ export function gainXp(u, amt) {
     u.level++;
     if (u.mods.levelHp) { u.hpBase += u.mods.levelHp; u.hp = Math.min(maxHp(u), u.hp + u.mods.levelHp); }
     if (u.isPlayer) {
-      const heal = TUNE.levelHeal || 0;
+      /* v3.0 升职体检=直接满血（VS 心跳）：残血在人堆里搏一个升级就地回满——
+       * "又容易又不容易"的生存张力来自这里，不来自数值抠搜 */
+      u.hp = maxHp(u);
       const shield = TUNE.levelShield || 0;
-      if (heal) u.hp = Math.min(maxHp(u), u.hp + heal);
       if (shield) {
         u.shield = Math.max(u.shield || 0, shield);
         u.shieldT = Math.max(u.shieldT || 0, TUNE.levelShieldT || 5);
@@ -2481,7 +2746,7 @@ export function gainXp(u, amt) {
       G.pendingLevels++;
       SFX.levelup();
       addFx({ type: 'levelupfx', x: u.x, y: u.y, r: 22, life: .8 });   // 升职金光柱
-      addFloat(u.x, u.y - 20, `升职了！+${heal} HP +${shield} 盾`, '#ffcf33', 9, 1);
+      addFloat(u.x, u.y - 20, `升职体检：满血复活 +${shield} 盾`, '#ffcf33', 9, 1);
     } else {
       /* 机器人不抽人设专属卡：这些卡的消费点全在玩家专属路径里，抽到即废（白白浪费成长） */
       const pool = SKILLS.filter(s => !s.persona && (u.skills[s.id] || 0) < s.max && (!s.valid || s.valid(u)));
@@ -2636,6 +2901,21 @@ function useItem(u, id) {
         if (u.isPlayer) addFloat(u.x, u.y - 20, '📉 天使轮跳票：血亏 20%', '#ff6a6a', 10, 2);
       }
       break;
+    case 'robot_vac': {
+      /* v3.0 磁铁时刻：全场经验豆起飞入袋（残血时咖啡豆一并代收）——VS 最便宜的多巴胺 */
+      if (u.isPlayer && G) {
+        let n = 0;
+        for (const p of G.pickups) {
+          if (p.dead) continue;
+          if (p.type === 'xp' || (p.type === 'heal' && (p.shield || u.hp < maxHp(u)))) {
+            p._fly = true; p._flyV = Math.max(p._flyV || 0, 380); n++;
+          }
+        }
+        addFloat(u.x, u.y - 24, `🤖 扫地机器人上岗：全场 ${n} 份窝囊费代收`, '#7ee08a', 10, 1.6);
+        SFX.fuse();
+      }
+      break;
+    }
   }
   if (u.isPlayer) SFX.pickup();
 }
@@ -3196,9 +3476,12 @@ function startTrialSubWave(idx) {
   tr.subWaveSpawnT = idx === 1 ? .3 : .5;   // 首波开局稍等，2/3 波多给点喘息
   let target = 0;
   if (comp) for (const { type, count } of comp) {
-    for (let i = 0; i < count; i++) tr.subWavePool.push(type);
+    /* v3.0 VS 化增压：月1 ×1.25、月2+ ×1.4——升级满血+咖啡豆掉落+磁吸把续航抬起来了，
+     * 密度就能压回去（v2.1 曾因淹死新手砍过量，现在生存工具箱变厚，还回来） */
+    const c2 = Math.round(count * (tr.wave <= 1 ? 1.25 : 1.4));
+    for (let i = 0; i < c2; i++) tr.subWavePool.push(type);
     const m = MOBS[type];
-    target += (m && m.groupSize) ? m.groupSize * count : count;
+    target += (m && m.groupSize) ? m.groupSize * c2 : c2;
   }
   tr.subWaveTarget = target;
   if (idx >= 2) warn(`⚡ 第 ${idx} 波：${describeSubWave(comp)}`);
@@ -3424,24 +3707,66 @@ export function update(dt) {
   }
   /* v2.2 正赛"琐事骚扰潮"：转正后周期性小撮杂鱼（含新行为怪）从圈内一角涌来，
    * 维持割草密度与怪物多样性——免试用期玩家也能见到全部怪物品类 */
-  if (!tr.active && G.player.alive) {
-    G.mobTrickleT = (G.mobTrickleT ?? 8) - dt;
-    if (G.mobTrickleT <= 0) {
-      /* v2.9 割草密度救活：22s/3-6只/cap14 → 9s/8-14只/cap36——
-       * 割草游戏的核心循环原来在转正后直接消失，正赛屏幕上永远只有零星几只 */
-      G.mobTrickleT = G.zone.phase >= 3 ? 16 : 9;
-      const wild = G.units.filter(u => u.alive && u.isMob && !u.publicIncident).length;
-      const cap = G.zone.phase >= 3 ? 16 : 36;
-      if (wild < cap) {
-        const n = Math.min(cap - wild, randi(8, 14)), a0 = rand(0, Math.PI * 2);
-        const month = Math.min(5, 3 + G.zone.phase);
+  /* ===== v3.0.1 人口控制器：VS 的本质不是波次刷怪，是"场上最低怪数"——
+   * 杀多快补多快，屏幕永远有草。波次/人墙只是叠在人口地板之上的事件尖峰。
+   * 试用期波次怪计入人口（倾倒期控制器自动歇火），波间空窗由控制器填满 ===== */
+  if (G.player.alive) {
+    G.popT = (G.popT ?? 1) - dt;
+    if (G.popT <= 0) {
+      G.popT = .7;
+      const alive = G.units.filter(u => u.alive && u.isMob && !u.publicIncident).length;
+      const floor = tr.active ? 16 + 7 * tr.wave
+        : G.zone.phase >= 4 ? 30 : G.zone.phase >= 3 ? 45 : 50 + 15 * G.zone.phase;
+      if (alive < floor && alive < 150) {
+        const month = tr.active ? tr.wave : Math.min(5, 3 + G.zone.phase);
+        const pool = (tr.active ? waveComp(month).types : BR_MOB_POOL).filter(t => MOBS[t].spd > 0 && !MOBS[t].groupSize);
+        const n = Math.min(floor - alive, 10);
+        const a0 = rand(0, Math.PI * 2);
         for (let i = 0; i < n; i++) {
-          const a = a0 + rand(-.9, .9), rr = rand(280, 420);
-          spawnMob(pick(BR_MOB_POOL),
+          const a = a0 + rand(-1.4, 1.4), rr = rand(380, 460);
+          const m = spawnMob(pick(pool),
             clamp(G.player.x + Math.cos(a) * rr, 30, TUNE.world - 30),
             clamp(G.player.y + Math.sin(a) * rr, 30, TUNE.world - 30), false, month);
+          if (m) { m.ambient = true; m.mobXp = Math.max(1, Math.round((m.mobXp || 1) * .7)); }   // 后台怪经验 7 折防通胀
         }
-        if (Math.random() < .35) addFeed('一批琐事找上门来', false);
+      }
+    }
+    /* 回收器：跑到 750px 外的普通怪传送回出生环——不删不重生，人口守恒；
+     * 顺带根治"怪卡在远处死角导致波次推不动"的整类问题。锚点怪（据点/蛇/编队/站桩）不回收 */
+    G.recycleT = (G.recycleT ?? 2) - dt;
+    if (G.recycleT <= 0) {
+      G.recycleT = 2;
+      for (const u of G.units) {
+        if (!u.alive || !u.isMob || u.publicIncident || u.isElite) continue;
+        if (u.snakePrev || u.mobGroup || u.formHost || (u.spdBase || 0) <= 0 || (MOBS[u.mobType] || {}).snakeHead) continue;
+        if (dist2(u.x, u.y, G.player.x, G.player.y) < 750 * 750) continue;
+        const a = rand(0, Math.PI * 2), rr = rand(380, 460);
+        u.x = clamp(G.player.x + Math.cos(a) * rr, 30, TUNE.world - 30);
+        u.y = clamp(G.player.y + Math.sin(a) * rr, 30, TUNE.world - 30);
+      }
+    }
+  }
+  if (!tr.active && G.player.alive) {
+    /* v3.0 人墙波「需求洪峰」：每 40-60s 一整面低血杂鱼墙从一个方向压过来（waveRush 强制冲锋），
+     * 制造"从人堆里犁开一条血路"的时刻。总量封顶 150 防炸帧 */
+    G.wallWaveT = (G.wallWaveT ?? 30) - dt;
+    if (G.wallWaveT <= 0 && G.zone.phase < 4) {
+      G.wallWaveT = rand(40, 60);
+      const wild2 = G.units.filter(u => u.alive && u.isMob && !u.publicIncident).length;
+      const n2 = Math.min(150 - wild2, 30 + G.zone.phase * 10);
+      if (n2 >= 16) {
+        const WALL_FODDER = ['email', 'email', 'read_reply', 'outsourced_army', 'paper_minion', 'cc_bomb'];
+        const a0 = rand(0, Math.PI * 2);
+        const month = Math.min(5, 3 + G.zone.phase);
+        for (let i = 0; i < n2; i++) {
+          const a = a0 + rand(-.8, .8), rr = rand(380, 470);
+          const m = spawnMob(pick(WALL_FODDER),
+            clamp(G.player.x + Math.cos(a) * rr, 30, TUNE.world - 30),
+            clamp(G.player.y + Math.sin(a) * rr, 30, TUNE.world - 30), false, month);
+          if (m) m.waveRush = true;   // 直线冲锋，不许绕路不许怂
+        }
+        warn('🌊 需求洪峰：一整面人墙压过来了！');
+        SFX.zone();
       }
     }
   }
@@ -4092,7 +4417,7 @@ export function update(dt) {
       if (u.poisonT <= 0) u.poisonDps = 0;
     }
   }
-  /* v18 新增：mine 类主武器地雷——burn 记录武装+触发 */
+  /* v18 新增：mine 类主武器地雷——burn 记录武装+触发；v3.1 连环塌方（mineChain）链式引爆 */
   for (const bz of G.burns) {
     if (bz.mineDmg === undefined) continue;
     if (!bz.mineArmed) {
@@ -4103,8 +4428,28 @@ export function update(dt) {
     // 已武装：检测敌人踩到触发圈
     const stepper = G.units.find(t => t.alive && isFoe(bz.owner, t) && dist2(t.x, t.y, bz.x, bz.y) < bz.r * bz.r);
     if (stepper) {
-      bz.t = bz.life;   // 标记为需要移除
-      explodeAt(bz.x, bz.y, bz.mineExplR, bz.mineDmg, bz.owner, bz.color);
+      const queue = [bz];
+      while (queue.length) {
+        const mz = queue.pop();
+        if (mz.t >= mz.life) continue;   // 已炸过
+        mz.t = mz.life;   // 标记为需要移除
+        explodeAt(mz.x, mz.y, mz.mineExplR, mz.mineDmg, mz.owner, mz.color);
+        if (mz.mineChain) for (const nz of G.burns) {
+          if (nz === mz || nz.mineDmg === undefined || nz.t >= nz.life) continue;
+          if (dist2(mz.x, mz.y, nz.x, nz.y) < 90 * 90) queue.push(nz);
+        }
+      }
+    }
+  }
+  /* v3.1 引力井：把圈内敌人往中心拽（Boss/小Boss 免疫） */
+  for (const bz of G.burns) {
+    if (!bz.pull) continue;
+    for (const t of G.units) {
+      if (!t.alive || !isFoe(bz.owner, t) || t.isBoss || t.eliteTier === 2) continue;
+      const d2v = dist2(t.x, t.y, bz.x, bz.y);
+      if (d2v > bz.r * bz.r || d2v < 12 * 12) continue;
+      const a = Math.atan2(bz.y - t.y, bz.x - t.x);
+      t.x += Math.cos(a) * bz.pull * dt; t.y += Math.sin(a) * bz.pull * dt;
     }
   }
   for (const b of G.burns) b.t += dt;
@@ -6018,7 +6363,7 @@ function updateMob(u, dt) {
     u.trailT = (u.trailT ?? 0) - dt;
     if (u.trailT <= 0) {
       u.trailT = m.slowTrail.drop;
-      G.burns.push({ x: u.x, y: u.y, r: m.slowTrail.r, dps: 0, slow: m.slowTrail.slow, life: m.slowTrail.life, t: 0, owner: u, color: '#38d3e8' });
+      G.burns.push({ x: u.x, y: u.y, r: m.slowTrail.r, dps: 0, slow: m.slowTrail.slow, life: m.slowTrail.life, t: 0, owner: u, color: '#38d3e8', spr: 'fx_waterpool' });
     }
   }
   /* HR 实习生：周期呼叫支援（召唤物 trialSubWave 置空，不影响波次目标计数） */
@@ -6196,7 +6541,7 @@ function updateSummon(u, dt) {
   } else if (T === 'meeting') {
     if (!tgt) { u.sumT = .5; return; }
     u.sumT = 7;
-    G.burns.push({ x: tgt.x, y: tgt.y, r: 30, dps: 2 * om, slow: .3, life: 3, t: 0, owner: u, color: '#6aa3ff' });
+    G.burns.push({ x: tgt.x, y: tgt.y, r: 30, dps: 2 * om, slow: .3, life: 3, t: 0, owner: u, color: '#6aa3ff', spr: 'fx_waterpool' });
   } else if (T === 'snitch') {
     if (!tgt || tgt.isElite || tgt.isBoss || tgt.isHR || !tgt.bot) { u.sumT = 1; return; }
     u.sumT = 10;
@@ -7002,7 +7347,7 @@ const T2_PATTERNS = {
         delay(() => {
           if (!u.alive) return;
           explodeAt(tx, ty, 64, b * .9, u, '#6aa3ff');
-          G.burns.push({ x: tx, y: ty, r: 56, dps: 0, slow: .4, life: 2.6, t: 0, owner: u, color: '#6aa3ff' });
+          G.burns.push({ x: tx, y: ty, r: 56, dps: 0, slow: .4, life: 2.6, t: 0, owner: u, color: '#6aa3ff', spr: 'fx_waterpool' });
         }, .8);
       }, i * .6);
     }
@@ -7279,7 +7624,7 @@ function updateElite(u, dt) {
       if (u.invitePending.t <= 0) {
         const ip = u.invitePending;
         u.invitePending = null;
-        G.burns.push({ x: ip.x, y: ip.y, r: 45, dps: 3, slow: .4, life: 4, t: 0, owner: u, color: '#6aa3ff' });
+        G.burns.push({ x: ip.x, y: ip.y, r: 45, dps: 3, slow: .4, life: 4, t: 0, owner: u, color: '#6aa3ff', spr: 'fx_waterpool' });
         for (const t2 of G.units) {
           if (!isFoe(u, t2) || dist2(ip.x, ip.y, t2.x, t2.y) > 45 * 45) continue;
           applyDamage(t2, 6 * u.mods.dmg, u);
@@ -7438,6 +7783,13 @@ function updateProjs(dt) {
             }
             if (o.hp <= 0 && !o.destroyed) { o.destroyed = true; o.destroyedT = DESTROY_FADE_T; onObstacleDestroyed(o); }
           }
+          /* v3.1 踢皮球/击鼓传锅：撞掩体反弹而不是碎——按进入深度选反射轴 */
+          if (p.wallBounce) {
+            const pdx = Math.min(p.x - o.x, o.x + o.w - p.x), pdy = Math.min(p.y - o.y, o.y + o.h - p.y);
+            bounceProj(p, pdx <= pdy, pdy <= pdx);
+            addParts(p.x, p.y, particleColor, 3, 40, .25);
+            return true;
+          }
           p.dead = true;
           addParts(p.x, p.y, particleColor, 4, 40, .3);
           if (p.owner && p.owner.isPlayer) SFX.obstacleHit();   // 清脆的叮命中反馈
@@ -7482,6 +7834,8 @@ function updateProjs(dt) {
             p.dead = true; break;
           }
         }
+        if (p.ignoreUnit === t) continue;   // v3.1 分裂子弹不吃刚被裂开的那个目标
+        if (p.vortexOn) { triggerVortex(p); break; }   // v3.1 会议邀请：碰人即开会
         p.hit.add(t);
         if (p.boom) { doBoom(p); break; }
         applyDamage(t, p.dmg, p.owner, { stun: p.stun });
@@ -7501,11 +7855,57 @@ function updateProjs(dt) {
           p.owner.weapon.subsidy = Math.min(cap, (p.owner.weapon.subsidy || 0) + 1);
           p.owner.weapon._subsidyIdleT = 0;
         }
+        /* v3.1 命中分裂（需求拆解/舆情失控）：本弹只裂一次，子需求扇形飞出 */
+        if (p.split && p.split.depth > 0) {
+          const sd = p.split;
+          p.split = null;
+          const baseA = Math.atan2(p.vy, p.vx);
+          const kidSplit = sd.depth > 1 ? { n: sd.n, dmgMult: sd.dmgMult, depth: sd.depth - 1, pierce: sd.pierce } : null;
+          for (let si = 0; si < sd.n; si++) {
+            const sa = baseA + (si - (sd.n - 1) / 2) * .5;
+            spawnBullet(p.owner, sa, { x: p.x, y: p.y, dmg: p.dmg * sd.dmgMult,
+              spd: Math.hypot(p.vx, p.vy), range: 130, r: Math.max(1.8, (p.r || 3) * .72),
+              shape: p.shape, color: p.color, pierce: sd.pierce || 0,
+              split: kidSplit, ignoreUnit: t });
+          }
+          if (nearPlayer(p.x, p.y) && Math.random() < .4) addFloat(p.x, p.y - 10, '需求 +' + sd.n, '#ffd9a0', 6, .6);
+        }
+        /* v3.1 命中弹射（转发邮件/舆情失控）：弹向最近未命中敌人，每跳增伤 */
+        if (p.ricochet && p.ricochet.hops > 0 && p.hit.size > p.pierce) {
+          const nt = nearestUnit(p.x, p.y, 180, o => isFoe(p.owner, o) && !p.hit.has(o));
+          if (nt) {
+            p.ricochet.hops--;
+            p.dmg *= p.ricochet.mult;
+            const a = Math.atan2(nt.y - p.y, nt.x - p.x);
+            const spd = Math.hypot(p.vx, p.vy);
+            p.vx = Math.cos(a) * spd; p.vy = Math.sin(a) * spd;
+            p.dist = 0; p.maxDist = 240;
+            /* 舆情失控：每跳再裂 */
+            if (p._viralSplit && G.projs.length < 260) p.split = { ...p._viralSplit };
+            if (nearPlayer(p.x, p.y) && Math.random() < .4) addFloat(p.x, p.y - 10, 'FW:', '#9ad1ff', 6, .5);
+            break;   // 转向后本帧不再继续判定
+          } else if (p.ricochet.endBoom) {
+            p.ricochet.hops = 0;
+            explodeAtNoRecurse(p.x, p.y, 34, p.dmg * .8, p.owner, '#9ad1ff');
+            if (nearPlayer(p.x, p.y)) addFloat(p.x, p.y - 12, '📢 辟谣通告', '#9ad1ff', 7, .8);
+          }
+        }
         if (p.hit.size > p.pierce) { p.dead = true; break; }
       }
     }
     if (p.dead) continue;
+    /* v3.1 击鼓传锅：铁锅沿途埋雷 */
+    if (p.potMine) {
+      p.potMine.t += dt;
+      if (p.potMine.t >= p.potMine.every) {
+        p.potMine.t = 0;
+        G.burns.push({ x: p.x, y: p.y, r: 24, dps: 0, slow: 0, life: 6, t: 0, owner: p.owner,
+          color: '#c9a06a', mineDmg: p.potMine.dmg, mineExplR: 44, mineArmed: false, mineFuseT: .3 });
+      }
+    }
     if (p.dist >= p.maxDist) {
+      if (p.vortexOn) { triggerVortex(p); continue; }   // v3.1 会议邀请飞到头：原地开会
+      if (p.wallBounce) { bounceProj(p, true, true); continue; }   // 皮球飞满一程当作撞墙折返
       if (p.boom) { doBoom(p); continue; }
       if (p.boomerang && p.boomerang.phase === 0) {
         p.boomerang.phase = 1; p.hit.clear(); p.dist = 0; p.maxDist = Infinity;
@@ -7514,6 +7914,8 @@ function updateProjs(dt) {
       p.dead = true; continue;
     }
     if (p.x < 4 || p.y < 4 || p.x > TUNE.world - 4 || p.y > TUNE.world - 4) {
+      if (p.wallBounce) { bounceProj(p, p.x < 4 || p.x > TUNE.world - 4, p.y < 4 || p.y > TUNE.world - 4); continue; }   // v3.1 弹墙
+      if (p.vortexOn) { triggerVortex(p); continue; }
       if (p.boom) doBoom(p);
       else if (p.boomerang && p.boomerang.phase === 0) {
         p.boomerang.phase = 1; p.hit.clear(); p.dist = 0; p.maxDist = Infinity;
@@ -7523,6 +7925,56 @@ function updateProjs(dt) {
     }
   }
   G.projs = G.projs.filter(p => !p.dead);
+}
+/* v3.1 引力井落地（强制拉会/项目火葬场）：拉 → 爆 →（传说）合拢火圈 */
+function triggerVortex(p) {
+  const v = p.vortexOn, owner = p.owner, x = p.x, y = p.y;
+  p.vortexOn = null; p.dead = true;
+  addFx({ type: 'vortexfx', x, y, r: v.pullR, life: v.pullT });
+  /* noDraw：范围表达交给风车特效本体，力场不再叠一层紫色大圆盘 */
+  G.burns.push({ x, y, r: v.pullR, dps: 0, slow: .2, life: v.pullT, t: 0, owner, color: '#b665ff', pull: 160, noDraw: true });
+  delay(() => {
+    if (!owner.alive) return;
+    explodeAtNoRecurse(x, y, 46, v.dmg, owner, '#b665ff');
+    const near = G.units.filter(t => isFoe(owner, t) && t.alive && dist2(x, y, t.x, t.y) < 55 * 55);
+    if (v.vuln) for (const t of near) { t.vulnT = Math.max(t.vulnT || 0, 3); t.vulnBonus = Math.max(t.vulnBonus || 0, .25); }
+    /* Lv5 散会互撞：被拉到一起的人互相追责 */
+    if (v.crash) for (let i = 0; i + 1 < near.length; i += 2) {
+      applyDamage(near[i], v.dmg * .4, owner, { quiet: true, fromProc: true });
+      applyDamage(near[i + 1], v.dmg * .4, owner, { quiet: true, fromProc: true });
+    }
+    /* 项目火葬场：外圈合拢一圈火墙 */
+    if (v.ringDps) for (let i = 0; i < 10; i++) {
+      const a = i / 10 * Math.PI * 2;
+      G.burns.push({ x: x + Math.cos(a) * v.pullR * .72, y: y + Math.sin(a) * v.pullR * .72,
+        r: 18, dps: v.ringDps, slow: .3, life: 2.5, t: 0, owner, color: '#ff5f3d', fireWall: true });
+    }
+    if (nearPlayer(x, y)) SFX.explo();
+  }, v.pullT);
+}
+/* v3.1 弹墙反弹（踢皮球/击鼓传锅）：世界边缘/掩体反弹，越弹越快，弹尽即散 */
+function bounceProj(p, nx, ny) {
+  const b = p.wallBounce;
+  if (nx) p.vx = -p.vx;
+  if (ny) p.vy = -p.vy;
+  p.vx *= b.accel; p.vy *= b.accel;
+  const spd = Math.hypot(p.vx, p.vy);
+  if (spd > 520) { p.vx *= 520 / spd; p.vy *= 520 / spd; }
+  p.x = clamp(p.x, 6, TUNE.world - 6); p.y = clamp(p.y, 6, TUNE.world - 6);
+  p.hit.clear();   // 新一轮弹程可重复命中
+  p.dist = 0;
+  b.left--;
+  b.count = (b.count || 0) + 1;
+  /* 踢皮球 Lv5：满速分裂小球（限量防爆屏） */
+  if (b.split && b.count % 2 === 0 && G.projs.filter(q => q.wallBounce && q.owner === p.owner).length < 8) {
+    G.projs.push({ ...p, r: Math.max(2.5, p.r * .7), dmg: p.dmg * .5, hit: new Set(),
+      vx: -p.vy * .9, vy: p.vx * .9, wallBounce: { left: 4, accel: 1.03 }, potMine: null, dead: false });
+  }
+  if (b.left <= 0) {
+    p.dead = true;
+    if (b.boomR) explodeAt(p.x, p.y, b.boomR, p.dmg * 1.5, p.owner, '#c9c4b4');
+    else addParts(p.x, p.y, p.color, 6, 70, .4);
+  } else if (nearPlayer(p.x, p.y) && Math.random() < .5) SFX.obstacleHit();
 }
 function doBoom(p) {
   p.dead = true;
@@ -7544,10 +7996,17 @@ function updatePickups(dt) {
     p.bob += dt * 4;
     if (p.type === 'box' && G.t > p.boxTtl) { p.dead = true; continue; }   // v2.8 纸箱过期
     if ((p.type === 'xp' || p.type === 'heal') && pl.alive) {
-      const d2 = dist2(p.x, p.y, pl.x, pl.y);
-      if (d2 < 52 * 52 && (p.type === 'xp' || pl.hp < maxHp(pl))) {
-        const a = Math.atan2(pl.y - p.y, pl.x - p.x);
-        p.x += Math.cos(a) * 170 * dt; p.y += Math.sin(a) * 170 * dt;
+      /* v3.0 磁吸拾取：原来 52px 内 170px/s 缓慢漂移——等于要踩上去才算捡，
+       * 大量远程击杀后经验豆满地躺尸（用户原话"绿色点点无法吸"）。
+       * 现在进 110px 圈即起飞，加速追踪直到入袋（VS 手感）；满血时血包留在原地不追 */
+      const wantIt = p.type === 'xp' || p.shield || pl.hp < maxHp(pl);
+      if (wantIt) {
+        if (!p._fly && dist2(p.x, p.y, pl.x, pl.y) < 110 * 110) { p._fly = true; p._flyV = 130; }
+        if (p._fly) {
+          p._flyV = Math.min(560, (p._flyV || 130) + dt * 1500);
+          const a = Math.atan2(pl.y - p.y, pl.x - p.x);
+          p.x += Math.cos(a) * p._flyV * dt; p.y += Math.sin(a) * p._flyV * dt;
+        }
       }
     }
     for (const u of G.units) {
@@ -7610,7 +8069,14 @@ function updatePickups(dt) {
           addFloat(p.x, p.y - 8, `护盾 +${p.shield}`, '#ffe270', 7, .7);
           break;
         }
-        if (u.hp >= maxHp(u)) continue;   // 满血留给需要的人
+        if (u.hp >= maxHp(u)) {
+          /* v3.0 可读性：满血踩过咖啡豆时节流提示一次——"绿点是什么/为什么捡不了"不再是谜 */
+          if (u.isPlayer && (G.healHintCd || 0) < G.t) {
+            G.healHintCd = G.t + 6;
+            addFloat(p.x, p.y - 10, '☕ 咖啡豆：满血先存着，残血自动来喝', '#7ee08a', 7, 1.2);
+          }
+          continue;   // 满血留给需要的人
+        }
         p.dead = true;
         u.hp = Math.min(maxHp(u), u.hp + (p.amt || 0));   // 防御：amt 缺失时不得产生 NaN
         if (u.isPlayer) {

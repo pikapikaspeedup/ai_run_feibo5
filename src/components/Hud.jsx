@@ -230,7 +230,7 @@ export default function Hud() {
             <div id="wpn-name">
               {w.leg
                 ? <><span className="leg-name">「{def.name}」</span><small>传说</small></>
-                : <>{def.name}<small>{def.country === 'CN' ? '国产' : def.country === 'OF' ? '办公' : '硅谷'}</small></>}
+                : <>{def.name}<small>{def.country === 'CN' ? '国产' : def.country === 'OF' ? '办公' : def.country === 'SP' ? '玄学' : def.country === 'ST' ? '风暴' : '硅谷'}</small></>}
             </div>
             <div id="wpn-pips">
               {[0, 1, 2, 3, 4].map(i => (

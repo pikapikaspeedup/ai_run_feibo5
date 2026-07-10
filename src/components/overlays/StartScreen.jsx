@@ -8,15 +8,20 @@ import { chipSprite } from '../../game/sprites.js';
 import { IS_TOUCH } from '../../game/input.js';
 import { startGame, loadBest } from '../../game/core.js';
 import { pick } from '../../game/utils.js';
+import { WPN_ICONS } from '../icons.js';
 import workerNative from '../../assets/worker_native.png';
 
-function DexIcon({ color }) {
+function DexIcon({ color, wid }) {
+  /* v3.2 武器专属像素图标（chip_<id>.png）优先，缺图回退程序化芯片色块 */
   const ref = useRef(null);
+  const hasIcon = wid && WPN_ICONS[wid];
   useEffect(() => {
+    if (hasIcon || !ref.current) return;
     const g = ref.current.getContext('2d');
     g.imageSmoothingEnabled = false;
     g.drawImage(chipSprite(color), 0, 0);
-  }, [color]);
+  }, [color, hasIcon]);
+  if (hasIcon) return <img src={WPN_ICONS[wid]} alt="" style={{ width: 14, height: 14, imageRendering: 'pixelated', flexShrink: 0 }} />;
   return <canvas ref={ref} width={9} height={8} />;
 }
 
@@ -124,19 +129,31 @@ export default function StartScreen() {
               <div className="dex-sec">— 国产队 —</div>
               {wRows('CN').map(([id, d]) => (
                 <div className="dex-row" key={id}>
-                  <DexIcon color={d.color} /><span className="d-name d-cn">{d.name}</span><span className="d-pat">{d.pat}</span>
+                  <DexIcon color={d.color} wid={id} /><span className="d-name d-cn">{d.name}</span><span className="d-pat">{d.pat}</span>
                 </div>
               ))}
               <div className="dex-sec">— 硅谷队 —</div>
               {wRows('US').map(([id, d]) => (
                 <div className="dex-row" key={id}>
-                  <DexIcon color={d.color} /><span className="d-name d-us">{d.name}</span><span className="d-pat">{d.pat}</span>
+                  <DexIcon color={d.color} wid={id} /><span className="d-name d-us">{d.name}</span><span className="d-pat">{d.pat}</span>
                 </div>
               ))}
               <div className="dex-sec">— 办公室武器科（v2.9 近战割草线，楼道里捡的）—</div>
               {wRows('OF').map(([id, d]) => (
                 <div className="dex-row" key={id}>
-                  <DexIcon color={d.color} /><span className="d-name" style={{ color: '#c9a227' }}>{d.name}</span><span className="d-pat">{d.pat}</span>
+                  <DexIcon color={d.color} wid={id} /><span className="d-name" style={{ color: '#c9a227' }}>{d.name}</span><span className="d-pat">{d.pat}</span>
+                </div>
+              ))}
+              <div className="dex-sec">— 精神防御科（v3.1 打工人玄学装备）—</div>
+              {wRows('SP').map(([id, d]) => (
+                <div className="dex-row" key={id}>
+                  <DexIcon color={d.color} wid={id} /><span className="d-name" style={{ color: '#b665ff' }}>{d.name}</span><span className="d-pat">{d.pat}</span>
+                </div>
+              ))}
+              <div className="dex-sec">— 职场风暴科（v3.1 机制=梗一体化线）—</div>
+              {wRows('ST').map(([id, d]) => (
+                <div className="dex-row" key={id}>
+                  <DexIcon color={d.color} wid={id} /><span className="d-name" style={{ color: '#ff8f5a' }}>{d.name}</span><span className="d-pat">{d.pat}</span>
                 </div>
               ))}
               <div className="dex-sec">— 传说融合 —</div>
