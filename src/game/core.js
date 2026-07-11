@@ -62,8 +62,9 @@ function warn(text) { bridge.emit('warn', text); }
 
 export function addFloat(x, y, text, color, size = 7, life = .8) {
   if (!G) return;
-  /* v2.6.2 全局上限兜底：任何路径失控刷字最多堆 120 条（丢最老），杜绝"粉色瀑布"级事故 */
-  if (G.floats.length >= 120) G.floats.shift();
+  /* v3.3 飘字预算 120→26：v3.0 割草密度×3 后，飘字是画面混乱第一元凶——
+   * 屏幕同时 26 条已是可读极限，超了丢最老（重要信息走 warn/feed 通道，不受此限） */
+  if (G.floats.length >= 26) G.floats.shift();
   G.floats.push({ x, y, text, color, size, life, t: 0 });
 }
 export function addParts(x, y, color, n, spd = 60, life = .5) {
@@ -1194,7 +1195,8 @@ function updateWeapon(u, dt, wantFire, aimA) {
         delay(() => {
           if (!u.alive) return;
           addFx({ type: 'acdripfx', x: dx, y: dy, r: 16, life: .5 });
-          const R = def.dropR * (w.lvl >= 3 ? 1.3 : 1) * u.mods.range;
+          /* v3.3 水滩半径封顶 64：dropR×等级×mods.range 三乘区叠出 250px 巨湖，几滩一叠半屏全蓝 */
+          const R = Math.min(64, def.dropR * (w.lvl >= 3 ? 1.3 : 1) * u.mods.range);
           for (const t of G.units) {
             if (!isFoe(u, t) || dist2(dx, dy, t.x, t.y) > (R + t.r) * (R + t.r)) continue;
             applyDamage(t, wpnDmg(u), u, { quiet: true });
@@ -2422,9 +2424,19 @@ function killUnit(victim, killer, cause, opts = {}) {
         addFloat(victim.x, victim.y - 14, childType === victim.mobType ? '需求又变了！' : '转发出去了！', '#7ac8ff', 6, .8);
     }
     if (Math.random() < .15) spawnXp(G, victim.x, victim.y, 2);
-    /* v3.0 杂鱼小概率掉咖啡豆（回血）：配合升级满血，人堆里的续航来自"多杀"而不是逃跑 */
-    if (Math.random() < .05 && (victim.hpBase || 0) >= 8)
-      G.pickups.push({ type: 'heal', amt: 10, x: victim.x + rand(-6, 6), y: victim.y + rand(-6, 6), bob: rand(0, 6) });
+    /* v3.0 杂鱼小概率掉咖啡豆（回血）：配合升级满血，人堆里的续航来自"多杀"而不是逃跑。
+     * v3.3 治理"绿十字地毯"：30px 内已有豆则并入（上限 30），全场散豆 ≤12 颗 */
+    if (Math.random() < .05 && (victim.hpBase || 0) >= 8) {
+      let nearBean = null, beanCnt = 0;
+      for (const p of G.pickups) {
+        if (p.dead || p.type !== 'heal' || p.shield) continue;
+        beanCnt++;
+        if (!nearBean && Math.abs(p.x - victim.x) < 30 && Math.abs(p.y - victim.y) < 30 && (p.amt || 0) < 30) nearBean = p;
+      }
+      if (nearBean) nearBean.amt = Math.min(30, (nearBean.amt || 0) + 6);
+      else if (beanCnt < 12)
+        G.pickups.push({ type: 'heal', amt: 10, x: victim.x + rand(-6, 6), y: victim.y + rand(-6, 6), bob: rand(0, 6) });
+    }
     /* 工资小偷：吐出偷走的全部经验 ×1.5（打死它就是赚的） */
     if (victim.stolenXp) {
       spawnXp(G, victim.x, victim.y, Math.round(victim.stolenXp * 1.5) + 2);
@@ -2551,14 +2563,17 @@ function killUnit(victim, killer, cause, opts = {}) {
     }
     /* v18: onKill proc 触发（杂鱼击杀也算，让"每击杀触发"类效果在割草时也生效） */
     if (!opts.fromProc && killer.mods && killer.mods.procs) fireProcs(killer, 'onKill', { victim });
-    /* v2.5 电子木鱼：任何击杀都敲一声，攒功德（每 5 声飘一次计数防刷屏） */
+    /* v2.5 电子木鱼：任何击杀都敲一声，攒功德。
+     * v3.3 重调：v3.0 割草量×20 后无上限功德=永生（实测银行 2089 功德=69 条命）——
+     * 封顶 60（最多存 2 条命）；飘字每 10 杀且 2s 冷却（原每 5 杀在新击杀速率下刷成柱） */
     if (killer.isPlayer && killer.mods.woodenFish) {
-      killer.merit = (killer.merit || 0) + 1;
-      if (killer.merit % 5 === 0 || killer.merit >= 30) {
-        addFloat(killer.x, killer.y - 24, `🪷 功德 ${killer.merit}/30`, '#ffe27a', 8.5, 1.1);
+      killer.merit = Math.min(60, (killer.merit || 0) + 1);
+      if ((killer.merit % 10 === 0 || killer.merit === 30) && (killer._meritFloatCd || 0) < G.t) {
+        killer._meritFloatCd = G.t + 2;
+        addFloat(killer.x, killer.y - 24, `🪷 功德 ${killer.merit}/30${killer.merit >= 60 ? '（已存满）' : ''}`, '#ffe27a', 8.5, 1.1);
         addFx({ type: 'woodenfishfx', x: killer.x, y: killer.y - 14, r: 14, life: .6 });
       }
-      if (nearPlayer(victim.x, victim.y)) SFX.pickup();
+      if (nearPlayer(victim.x, victim.y) && Math.random() < .3) SFX.pickup();
     }
     /* v2.5 Ctrl+C/Ctrl+V：杂鱼击杀也要能粘贴分身（放在 isMob return 之前，割草时才爽） */
     if (killer.isPlayer && killer.mods.ctrlCV && Math.random() < .08) {
@@ -3598,6 +3613,16 @@ export function update(dt) {
           for (const u2 of waveMobs) if (!u2.waveRush) { u2.waveRush = true; newly++; }
           if (newly > 0) addFeed('⏰ 快下班了：剩余琐事不再躲猫猫，主动找上门来', true);
         }
+        /* v3.2c ④终极兜底：狂暴令下达 40s 仍有漏网（任何未知的"追不上"死角）→
+         * HR 代为处理，波次在设计上永远不可能无限卡死 */
+        if (tr.waveStuckT >= 40 && waveMobs.length > 0) {
+          for (const u2 of waveMobs) {
+            addFloat(u2.x, u2.y - 16, '拖延症晚期，HR 代为处理', '#ff9edb', 8, 1.4);
+            addParts(u2.x, u2.y, '#ff9edb', 8, 80, .5);
+            killUnit(u2, null, 'timeout');
+          }
+          addFeed(`🗂 HR 出手：${waveMobs.length} 件拖延琐事被直接归档`, true);
+        }
       }
     } else tr.waveStuckT = 0;
     /* 本波清完（pool 空 && 击杀达标）→ 推进 */
@@ -3727,22 +3752,26 @@ export function update(dt) {
           const m = spawnMob(pick(pool),
             clamp(G.player.x + Math.cos(a) * rr, 30, TUNE.world - 30),
             clamp(G.player.y + Math.sin(a) * rr, 30, TUNE.world - 30), false, month);
-          if (m) { m.ambient = true; m.mobXp = Math.max(1, Math.round((m.mobXp || 1) * .7)); }   // 后台怪经验 7 折防通胀
+          if (m) { m.ambient = true; m.mobXp = Math.max(1, Math.round((m.mobXp || 1) * .5)); }   // v3.3 后台怪经验 7 折→5 折（割草的爽在割，不在升）
         }
       }
     }
     /* 回收器：跑到 750px 外的普通怪传送回出生环——不删不重生，人口守恒；
-     * 顺带根治"怪卡在远处死角导致波次推不动"的整类问题。锚点怪（据点/蛇/编队/站桩）不回收 */
+     * 顺带根治"怪卡在远处死角导致波次推不动"的整类问题。锚点怪（据点/蛇/编队）不回收。
+     * v3.2c 站桩豁免改显式类型集：原来用 spdBase<=0 判断，把 chair_crazy（spd:0 但靠弹射自驱、
+     * 能弹到天边）也豁免了——正是"椅子弹走后永不归位"卡波链条的一环 */
     G.recycleT = (G.recycleT ?? 2) - dt;
     if (G.recycleT <= 0) {
       G.recycleT = 2;
+      const STATIC_MOBS = { night_lamp: 1, deadline_alarm: 1, req_review_board: 1, smoker: 1, urgent_meeting: 1 };
       for (const u of G.units) {
         if (!u.alive || !u.isMob || u.publicIncident || u.isElite) continue;
-        if (u.snakePrev || u.mobGroup || u.formHost || (u.spdBase || 0) <= 0 || (MOBS[u.mobType] || {}).snakeHead) continue;
+        if (u.snakePrev || u.mobGroup || u.formHost || STATIC_MOBS[u.mobType] || (MOBS[u.mobType] || {}).snakeHead) continue;
         if (dist2(u.x, u.y, G.player.x, G.player.y) < 750 * 750) continue;
         const a = rand(0, Math.PI * 2), rr = rand(380, 460);
         u.x = clamp(G.player.x + Math.cos(a) * rr, 30, TUNE.world - 30);
         u.y = clamp(G.player.y + Math.sin(a) * rr, 30, TUNE.world - 30);
+        u.bounceDir = null;   // 弹射怪重掷方向（否则回来一帧又朝原方向弹走）
       }
     }
   }
@@ -6151,6 +6180,13 @@ function updateMob(u, dt) {
   }
   /* 人体工学椅：台球式直线反弹，每 3 次反弹喘 1.2s（破绽） */
   if (m.bounce) {
+    /* v3.2c 清场冲锋对弹射椅生效：waveRush 时不休息、每帧锁定玩家方向（保留弹射演出但必冲人）——
+     * 原来 bounce 分支在 waveRush 检查之前就 return，v2.6 的收尾狂暴对它完全无效，
+     * 两把椅子弹到天边 = 波次永久卡死（用户报"两个怪疯狂飞，追不上，波次完不成"） */
+    if (u.waveRush && G.player.alive) {
+      u.restT = 0;
+      u.bounceDir = Math.atan2(G.player.y - u.y, G.player.x - u.x) + rand(-.08, .08);
+    }
     if (u.restT > 0) {
       u.restT -= dt;
       moveWithCollide(u, 0, 0, dt);

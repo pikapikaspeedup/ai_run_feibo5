@@ -49,7 +49,10 @@ export const TUNE = {
   coffeeMachineCd: 10,
   coffeeMachineUses: 4,
   coffeePlayerCd: .8,
-  levelNeed: lvl => Math.round(10 * Math.pow(1.22, lvl)),   // v18：1.26→1.22 回到原设计值。之前把底数抬高+折扣加深是双重减配，让试用期玩家转正只到 Lv.10 而非设计假设的 Lv.13
+  /* v3.3：1.22→1.27。v3.0 割草密度×3 + 合豆磁吸把拾取率拉到近 100%，
+   * 白板全托管实测 2 分钟 Lv8 / 5 分钟 Lv13，真实玩家滚雪球后失控（用户实况单局 2000+ 击杀）——
+   * 指数底数是唯一能压住"越强杀越快"正反馈的杠杆 */
+  levelNeed: lvl => Math.round(10 * Math.pow(1.27, lvl)),
   bossHp: 1500,          // 上限参考值；实际按登场时机与玩家等级插值，见 spawnBoss
   bossAt: 360,           // 插值基准；实际触发见 endChecks（t>=300 或存活<=3）
   /* 试用期月度时长：三段式结构（爆发/涓流/考核），考核秒数固定给足现有17秒击杀窗口+缓冲，

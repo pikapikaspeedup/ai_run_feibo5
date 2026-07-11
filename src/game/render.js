@@ -492,8 +492,10 @@ export function render(ctx) {
     }
     const bf = b.spr && fxLoop(b.spr, G.t * 8 + b.x * .05);
     if (bf) {
-      ctx.globalAlpha = .85;
-      const s = b.r * 2.4 / bf.width;
+      /* v3.3 贴图地面区绘制封顶 70：半径乘区失控时视觉不再淹屏（判定半径不受影响） */
+      ctx.globalAlpha = .8;
+      const rCap = Math.min(b.r, 70);
+      const s = rCap * 2.4 / bf.width;
       ctx.drawImage(bf, b.x - bf.width * s / 2, b.y - bf.height * s / 2, bf.width * s, bf.height * s);
       ctx.globalAlpha = 1;
       continue;
